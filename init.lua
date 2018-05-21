@@ -129,6 +129,7 @@ function safe(func)  -- run a function without crashing the game. All errors are
 			return out
 		else
 			table.insert(output, "#ff0000Error:  "..out)
+			minetest.debug("Error (func):  "..out)
 			return nil
 		end
 	end
@@ -154,8 +155,10 @@ function run(code, name)  -- run a script
 	else
 		if saved == false then
 			table.insert(output, "#ff0000Error:  "..err)  -- display errors
+			minetest.debug("Error (unsaved):  "..out)
 		else
 			table.insert(output, "#ff0000"..name..": Error:  "..err)
+			minetest.debug("Error ("..name.."):  "..out)
 		end
 	end
 end
