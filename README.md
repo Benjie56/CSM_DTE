@@ -29,6 +29,11 @@ screenshot:
 - run it, save it, put it in startup
 - detailed instructions at top of `init.lua` file. 
 
+## How to install
+- make sure you have `enable_client_modding = true` in your `minetest.conf` file
+- download and extract the zip file into `clientmods\lua_ide` or paste the `init.lua` file into it.
+- add `load_mod_lua_ide = true` to the `clientmods\mods.conf` file
+- restart the game
 
 ### TODO:
 - add a UI editor
