@@ -1,4 +1,5 @@
-# lua-IDE
+# CSM DTE
+## Client Side Mod Designing & Testing Environment
 An ingame lua editor for minetest with some useful features.
 
 This can be used for creating, testing and using CSMs without reloading the game, and without the game crashing.
