@@ -155,10 +155,10 @@ function run(code, name)  -- run a script
 	else
 		if saved == false then
 			table.insert(output, "#ff0000Error:  "..err)  -- display errors
-			minetest.debug("Error (unsaved):  "..out)
+			minetest.debug("Error (unsaved):  "..err)
 		else
 			table.insert(output, "#ff0000"..name..": Error:  "..err)
-			minetest.debug("Error ("..name.."):  "..out)
+			minetest.debug("Error ("..name.."):  "..err)
 		end
 	end
 end
