@@ -41,4 +41,4 @@ screenshot:
 - add a lua console
 
 UI editor progress:
-- See `Future Formspec Editor Progress.png`
+![Form Editor](Formspec_Editor_Progress.png)
