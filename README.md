@@ -39,3 +39,6 @@ screenshot:
 ### TODO:
 - add a UI editor
 - add a lua console
+
+UI editor progress:
+- See `Future Formspec Editor Progress.png`
