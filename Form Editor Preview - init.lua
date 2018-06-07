@@ -254,7 +254,7 @@ local function generate_string()
     local fwidth = 0
     local fheight = 0
     
-    local function get_rect(widget)  -- all to change \|/
+    local function get_rect(widget)
         local wleft = 0
         if widget.left_type == "R-" then
             wleft = fwidth-widget.left
