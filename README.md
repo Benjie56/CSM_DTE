@@ -41,4 +41,5 @@ screenshot:
 - add a lua console
 
 UI editor progress:
+copy the `Form Editor preview - init.lua` file into a new client mod folder, rename it to `init.lua` and open it in minetest using `.gui` to test the current progress.
 ![Form Editor](Formspec_Editor_Progress.png)
