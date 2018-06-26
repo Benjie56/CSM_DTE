@@ -1,56 +1,59 @@
 --[[
+docs:
 https://github.com/minetest/minetest/blob/master/doc/lua_api.txt#L2370
-
-TODO:
-
-    
-    table... see docs
-
---
-
-tabs: "tabheader[X,Y;name;caption 1,caption etc;current_tab;(transparent);(draw_border)]`
-
-colours can be transparent! - #ff00ff00  (sometimes)
 
 ]]--
 
 
+-- this stuff will be seperate from the rest when the seperate files are put into one
 local data = {  -- window size
     width = 15,
     height = 10,
     
 }
-local form_esc = minetest.formspec_escape
-
-local widg_list = {"Button", "DropDown", "CheckBox", "Slider", "TextList", "Table", "Field", "TextArea", "InvList", "Label", "Image", "Box", "Container"}
-
-local widgets = nil
-
-local selected_widget = 1
-
-local main_form  -- make the function available to the rest of the program
-
+local form_esc = minetest.formspec_escape  -- shorten the function
 
 local modstorage = core.get_mod_storage()
 
-local current_name = modstorage:get_string("_GUI_editor_selected_file")
-if current_name == "" then  -- for first ever load
-    current_name = "new"
-    modstorage:set_string("_GUI_editor_selected_file", current_name)
-    modstorage:set_string("_GUI_editor_file_"..current_name, dump({{type="Size", name="", width=5, height=5, width_param=false, height_param=false, left=0.5, top=0.5, position=false}}))
+local function create_tabs(selected)
+    return ""
 end
 
-local function reload()
-    modstorage:set_string("_GUI_editor_file_"..current_name, dump(widgets))
-    minetest.show_formspec("ui_editor:main", main_form())
+
+---------- ----------
+-- FORMSPEC EDITOR --
+---------- ----------
+
+local widg_list = {"Button", "DropDown", "CheckBox", "Slider", "TextList", "Table", "Field", "TextArea", "InvList", "Label", "Image", "Box", "Container"}  -- all widget options
+
+local widgets = nil  -- stores all widget data for the current file
+
+local selected_widget = 1  -- the widget/tab currently being edited
+
+local main_ui_form  -- make this function global to the rest of the program
+
+
+local current_ui_file = modstorage:get_string("_GUI_editor_selected_file")  -- file name of last edited file
+if current_ui_file == "" then  -- for first ever load
+    current_ui_file = "new"
+    modstorage:set_string("_GUI_editor_selected_file", current_ui_file)
+    modstorage:set_string("_GUI_editor_file_"..current_ui_file, dump({{type="Size", name="", width=5, height=5, width_param=false, height_param=false, left=0.5, top=0.5, position=false}}))
 end
 
-local function load_UI(name)
-    current_name = name
-    modstorage:set_string("_GUI_editor_selected_file", current_name)
-    _, widgets = pcall(loadstring("return "..modstorage:get_string("_GUI_editor_file_"..current_name)))
+local function reload_ui()  -- update the display, and save the file
+    modstorage:set_string("_GUI_editor_file_"..current_ui_file, dump(widgets))
+    minetest.show_formspec("ui_editor:main", main_ui_form())
 end
-load_UI(current_name)
+
+local function load_UI(name)  -- open/create a ui file
+    current_ui_file = name
+    modstorage:set_string("_GUI_editor_selected_file", current_ui_file)
+    _, widgets = pcall(loadstring("return "..modstorage:get_string("_GUI_editor_file_"..current_ui_file)))
+    if widgets == nil then
+        widgets = {{type="Size", name="", width=5, height=5, width_param=false, height_param=false, left=0.5, top=0.5, position=false}}
+    end
+end
+load_UI(current_ui_file)
 
 --widgets = {{type="Size", name="", width=5, height=5, width_param=false, height_param=false, left=0.5, top=0.5, position=false}}
 
@@ -58,37 +61,40 @@ load_UI(current_name)
 -- UI DISPLAY
 ----------
 
+-- generates the preview of the UI being edited
 local function generate_ui()
-    local width = data.width-5
+    local width = data.width-5  -- the size that is needed for the final formspec size, so large formspecs can be previewed
     local height = data.height
     
+    -- data for calculating positions
     local left = {0.1}
     local top = {0.1}
     local fwidth = {1}
     local fheight = {1}
     
-    local depth = 1
+    local depth = 1  -- container depth
     
-    local function get_rect(widget, real, full)  -- controll widget positions
+    -- calculates the positions of widgets, and creates the position syntax from a widget def
+    local function get_rect(widget, real, full)
     
-        local wleft = 0
-        if widget.left_type == "R-" then
+        local wleft = 0  -- widget top (etc)
+        if widget.left_type == "R-" then  -- right is value from right side
             wleft = left[depth]+fwidth[depth]-widget.left
-        elseif widget.left_type == "W/" then
+        elseif widget.left_type == "W/" then  -- right is width/value from left side
             wleft = left[depth]+fwidth[depth]/widget.left
-        else
+        else  -- right is value from left side
             wleft = left[depth]+widget.left
         end
-        if full then
+        if full then  -- container only takes whole numbers as positions.
             wleft = math.floor(wleft-left[depth])+left[depth]
         end
         
         local wtop = 0
-        if widget.top_type == "B-" then
+        if widget.top_type == "B-" then  -- value from bottom
             wtop = top[depth]+fheight[depth]-widget.top
-        elseif widget.top_type == "H/" then
+        elseif widget.top_type == "H/" then  -- height/value from top
             wtop = top[depth]+(fheight[depth]/widget.top)
-        else
+        else  -- value from top
             wtop = top[depth]+widget.top
         end
         if full then
@@ -104,7 +110,7 @@ local function generate_ui()
                 wright = left[depth]+fwidth[depth]-widget.right-wleft
             elseif widget.right_type == "W/" then
                 wright = left[depth]+fwidth[depth]/widget.right-wleft
-            elseif widget.right_type == "R" then
+            elseif widget.right_type == "R" then  -- relative to left
                 wright = widget.right
             else
                 wright = left[depth]+widget.right-wleft
@@ -122,7 +128,7 @@ local function generate_ui()
             end
             
             if real then
-                return {left=wleft, top=wtop, width=wright, height=wbottom}
+                return {left=wleft, top=wtop, width=wright, height=wbottom}  -- table uses the calculated values for other things
             end
             return wleft..","..wtop..";"..wright..","..wbottom..";"
         end
@@ -130,26 +136,27 @@ local function generate_ui()
     
     local form = ""
     
+    -- iterate all widgets
     for i, v in pairs(widgets) do
         
-        if v.type == "Size" then
+        if v.type == "Size" then  -- defines the size
             if v.width < data.width-5.2 then
-                left = {math.floor(((data.width-5)/2 - v.width/2)*10)/10}
+                left = {math.floor(((data.width-5)/2 - v.width/2)*10)/10}  -- place the form in the center
             else
-                width = math.floor((v.width+0.2)*10)/10
+                width = math.floor((v.width+0.2)*10)/10  -- resize for large forms
             end
-            if v.height < data.height-0.2 then
+            if v.height < data.height-0.2 then -- ^
                 top = {data.height/2 - v.height/2}
             else
                 height = v.height+0.2
             end
             fwidth = {v.width}
             fheight = {v.height}
-            form = form .. "box["..left[1]..","..top[1]..";"..v.width..","..v.height..";#000000]"
+            form = form .. "box["..left[1]..","..top[1]..";"..v.width..","..v.height..";#000000]"  -- this adds it to the form
             
             
         elseif v.type == "Button" then
-            if v.image then
+            if v.image then  -- image option
                 if v.item and not v.exit then
                     form = form .. "item_image_button["..get_rect(v)..form_esc(v.texture)..";_none;"..form_esc(v.label).."]"
                 else
@@ -160,7 +167,7 @@ local function generate_ui()
             end
         
         elseif v.type == "Field" then
-            if v.password then
+            if v.password then  -- password option
                 form = form .. "pwdfield["..get_rect(v).."_none;"..form_esc(v.label).."]"
             else
                 form = form .. "field["..get_rect(v).."_none;"..form_esc(v.label)..";"..form_esc(v.default).."]"
@@ -170,42 +177,34 @@ local function generate_ui()
             form = form .. "textarea["..get_rect(v).."_none;"..form_esc(v.label)..";"..form_esc(v.default).."]"
         
         elseif v.type == "Label" then
-            if v.vertical then
+            if v.vertical then  -- vertical option
                 form = form .. "vertlabel["..get_rect(v)..form_esc(v.label).."]"
             else
                 form = form .. "label["..get_rect(v)..form_esc(v.label).."]"
             end
             
         elseif v.type == "TextList" then
-            local item_str = ""
-            if v.param_list then
-                item_str = "item 1,item 2,item 3"
-            else  -- convert item list to string if items not from parameter
-                for i, item in pairs(v.items) do
-                    item_str = item_str .. form_esc(item)..","
-                end
+            local item_str = ""  -- convert the list to a sting
+            for i, item in pairs(v.items) do
+                item_str = item_str .. form_esc(item)..","
             end
-            if v.transparent then
-                form = form .. "textlist["..get_rect(v).."_none;"..item_str..";1;True]"  -- transparency needs longer string
+            if v.transparent then  -- transparent option
+                form = form .. "textlist["..get_rect(v).."_none;"..item_str..";1;True]"
             else
                 form = form .. "textlist["..get_rect(v).."_none;"..item_str.."]"
             end
             
         elseif v.type == "DropDown" then
-            local item_str = ""
-            if v.param_list then
-                item_str = "item 1,item 2,item 3"
-            else  -- convert item list to string if items not from parameter
-                for i, item in pairs(v.items) do
-                    item_str = item_str .. form_esc(item)..","
-                end
+            local item_str = ""  -- convert the list to a string
+            for i, item in pairs(v.items) do
+                item_str = item_str .. form_esc(item)..","
             end
             form = form .. "dropdown["..get_rect(v).."_none;"..item_str..";"..v.select_id.."]"
             
         elseif v.type == "CheckBox" then
             form = form .. "checkbox["..get_rect(v).."_none;"..v.label..";"..tostring(v.checked).."]"
             
-        elseif v.type == "Box" then
+        elseif v.type == "Box" then  -- a coloured square
             form = form .. "box["..get_rect(v)..form_esc(v.colour).."]"
         
         elseif v.type == "Image" then
@@ -223,10 +222,10 @@ local function generate_ui()
             form = form .. "scrollbar["..get_rect(v)..orientation..";_none;"..v.value.."]"
             
         elseif v.type == "InvList" then
-            local extras = {["player:"]=1, ["nodemeta:"]=1, ["detached:"]=1}
+            local extras = {["player:"]=1, ["nodemeta:"]=1, ["detached:"]=1}  -- locations that need extra info (v.data)
             if extras[v.location] then
                 form = form .. "list["..v.location..form_esc(v.data)..";"..form_esc(v.name)..";"..get_rect(v).."]"
-                if v.ring then
+                if v.ring then  -- items can be shift clicked between ring items
                     form = form .. "listring["..v.location..form_esc(v.data)..";"..form_esc(v.name).."]"
                 end
             else
@@ -236,22 +235,58 @@ local function generate_ui()
                 end
             end
         
-        --elseif v.type == "" then
-        --    form = form .. "["..get_rect(v).."_none;".."".."]"
+        elseif v.type == "Table" then
+            local cell_str = ""
+            local column_str = ""
+            
+            local most_items = 0  -- the amount of rows needed = the most items in a column
+            for i, c in pairs(v.columns) do
+                if #c.items > most_items then  -- get max length
+                    most_items = #c.items
+                end
+                
+                if i > 1 then
+                    column_str = column_str..";"
+                end
+                column_str = column_str .. c.type  -- add column types
+                if c.type == "image" then  -- add list of available images
+                    for n, t in pairs(c.images) do
+                        column_str = column_str..","..n .."="..form_esc(t)
+                    end
+                elseif c.type == "color" and c.distance ~= "infinite" then  -- add distance that coloures affect
+                    column_str = column_str..",span="..c.distance
+                end
+            end
+            for i=1, most_items do  -- create a list from all column's lists
+                for n, c in pairs(v.columns) do  -- create a row from column's items
+                    if n > 1 or i > 1 then
+                        cell_str = cell_str..","
+                    end
+                    local item = c.items[i]
+                    if item == nil then  -- blank item if this column doesn't exend as far
+                        item = ""
+                    end
+                    cell_str = cell_str..form_esc(item)
+                end
+            end
+            if column_str:len() > 0 then
+                form = form .. "tablecolumns["..column_str.."]"
+            end
+            form = form .. "table["..get_rect(v).."_none;"..cell_str..";-1]"
         
         elseif v.type == "Container - Start" then
             local rect = get_rect(v, true, true)
-            left[depth+1] = rect.left
+            left[depth+1] = rect.left  -- register the new area
             top[depth+1] = rect.top
             fwidth[depth+1] = rect.width
             fheight[depth+1] = rect.height
             depth = depth+1
         elseif v.type == "Container - End" then
-            depth = depth-1
+            depth = depth-1  -- go back to the parent area
         
         end
     end
-    form = form .. "field_close_on_enter[_none;false]"
+    form = form .. "field_close_on_enter[_none;false]"  -- enter won't close the formspec in any textbox
     
     return form, width+5, height
 end
@@ -261,16 +296,22 @@ end
 -- Compiling
 ----------
 
+-- generates a function to create the UI, with parameters
 local function generate_function()
-    local parameters = {}
+    local form_esc = function(str)  -- escape symbols need to be escaped
+        return string.gsub(minetest.formspec_escape(str), "\\", "\\\\")  -- which have to be escaped...
+    end
+    
+    local parameters = {}  -- these store info which will be put together at the end
     local before_str = ""
     local display = {}
     local form = ""
+    local table_items = false
     
-    local function name(v)
+    local function name(v)  -- converts the name into something that can be used in parameters
         n = v.name
         
-        if v.type == "InvList" then
+        if v.type == "InvList" then  -- the name of inv lists is used differently
             n = v.location.."_"..v.name
         end
         
@@ -280,7 +321,7 @@ local function generate_function()
         chars = chars..string.upper(chars)
         for i=1, #n do
             local c = n:sub(i,i)
-            if string.find(chars, c, 1, true) or (string.find("1234567890", c, 1, true) and i ~= 1) then
+            if string.find(chars, c, 1, true) or (string.find("1234567890", c, 1, true) and i ~= 1) then  -- numbers only allowed after first char
                 new = new..c
             else
                 new = new.."_"
@@ -290,26 +331,27 @@ local function generate_function()
     end
     
     local width = {widgets[1].width}
-    if widgets[1].width_param then
+    if widgets[1].width_param then  -- if size defined from parameters
         width = {"width"}
     end
     local height = {widgets[1].height}
     if widgets[1].height_param then
         height = {"height"}
     end
-    local dep = 1
+    local dep = 1  -- depth into containers
     
+    -- returns a string containing the position and size of a widget, or (hopefully) the most efficient calculation
     local function get_rect(widget, real, l, t)
         local fwidth = width[dep]
         local fheight = height[dep]
         
         local wleft = "0"
-        if type(fwidth) == "string" or l then
-            local l_ = l
+        if type(fwidth) == "string" or l then  -- if the area width (window or continer) will be changed with a parameter
+            local l_ = l  -- if the left of the widget comes from a parameter
             if l_ == nil then
                 l_ = widget.left
             end
-            if widget.left_type == "R-" then
+            if widget.left_type == "R-" then  -- different position types
                 wleft = fwidth..'- '..l_
             elseif widget.left_type == "W/" then
                 wleft = fwidth..'/'..l_
@@ -320,7 +362,7 @@ local function generate_function()
                 wleft = '"..'..wleft..' .."'
             end
         else
-            if widget.left_type == "R-" then
+            if widget.left_type == "R-" then  -- calculation made now if nothing comes from a parameter
                 wleft = fwidth-widget.left
             elseif widget.left_type == "W/" then
                 wleft = fwidth/widget.left
@@ -329,7 +371,7 @@ local function generate_function()
             end
         end
         
-        local wtop = "0"
+        local wtop = "0"  --top
         if type(fheight) == "string" or t then
             local t_ = t
             if t_ == nil then
@@ -360,12 +402,13 @@ local function generate_function()
         
         else
             local wright = 0
-            if type(fwidth) == "string" then
+            if type(fwidth) == "string" then  -- if the width is changed by a parameter
                 local l_ = l
                 if l_ == nil then
                     l_ = widget.left
                 end
-                if widget.right_type == "R-" then
+                -- goes through all right types, and for eacg, goes through all left types to get the best calculation.
+                if widget.right_type == "R-" then  -- (I know there is a better way of doing this)
                     if widget.left_type == "R-" then
                         wright = fwidth..'- '..widget.right..'-('..fwidth..'- '..l_..')'
                     elseif widget.left_type == "W/" then
@@ -430,7 +473,7 @@ local function generate_function()
                 if type(wright) == "string" and not real then
                     wright = '"..'..wright..' .."'
                 end
-            else
+            else  -- if all values are known now
                 if widget.right_type == "R-" then
                     wright = fwidth-widget.right-wleft
                 elseif widget.right_type == "W/" then
@@ -442,10 +485,10 @@ local function generate_function()
                 end
             end
             
-            local wbottom = 0
+            local wbottom = 0  -- similar for bottom
             if type(fheight) == "string" then
                 local t_ = t
-                if t_ == nil then
+                if t_ == nil then  -- if widget's top comes from a parameter (container)
                     t_ = widget.top
                 end
                 if widget.bottom_type == "B-" then
@@ -499,7 +542,7 @@ local function generate_function()
                     else
                         wbottom = fheight/widget.bottom.."- "..t
                     end
-                elseif widget.bottom_type == "R" then  -- for widgets where the height option doesn't change the height
+                elseif widget.bottom_type == "R" then
                     wbottom = widget.bottom
                 else
                     if widget.top_type == "B-" then
@@ -520,7 +563,7 @@ local function generate_function()
                     wbottom = fheight-widget.bottom-wtop
                 elseif widget.bottom_type == "H/" then
                     wbottom = fheight/widget.bottom-wtop
-                elseif widget.bottom_type == "R" then  -- for widgets where the height option doesn't change the height
+                elseif widget.bottom_type == "R" then
                     wbottom = widget.bottom
                 else
                     wbottom = widget.bottom-wtop
@@ -528,7 +571,7 @@ local function generate_function()
             end
             
             if real then
-                return {left=wleft, top=wtop, width=wright, height=wbottom}
+                return {left=wleft, top=wtop, width=wright, height=wbottom}  -- container needs the values seperate
             end
             return wleft..","..wtop..";"..wright..","..wbottom
         end
@@ -537,11 +580,12 @@ local function generate_function()
     
     local w, h = 0, 0
     
+    -- go through all the widgets, and add their code
     for i, v in pairs(widgets) do
         
         if v.type == "Size" then
             local w, h
-            if v.width_param then
+            if v.width_param then  -- things like this are for parameters
                 table.insert(parameters, "width")
                 w = '"..width.."'
             else
@@ -554,42 +598,42 @@ local function generate_function()
                 h = tostring(v.height)
             end
             table.insert(display, '"size['..w..','..h..']"')
-            if v.position then
+            if v.position then  -- for non-default position
                 table.insert(display, '"position['..v.left..','..v.top..']"')
             end
         
         elseif v.type == "Button" then
             if v.image then
                 local tex = ""
-                if v.image_param then
+                if v.image_param then  -- image texture param
                     table.insert(parameters, name(v).."_image")
                     tex = '"..'..name(v)..'_image.."'
                 else
                     tex = form_esc(v.texture)
                 end
-                if v.item and not v.exit then
+                if v.item and not v.exit then  -- quit on click
                     table.insert(display, '"item_image_button['..get_rect(v)..';'..tex..';'..form_esc(v.name)..';'..form_esc(v.label)..']"')
                 else
-                    if v.exit then
+                    if v.exit then  -- quit on click - image
                         table.insert(display, '"image_button_exit['..get_rect(v)..';'..tex..';'..form_esc(v.name)..';'..form_esc(v.label)..']"')
-                    else
+                    else  -- normal image
                         table.insert(display, '"image_button['..get_rect(v)..';'..tex..';'..form_esc(v.name)..';'..form_esc(v.label)..']"')
                     end
                 end
             else
-                if v.exit then
+                if v.exit then  -- quit on click
                     table.insert(display, '"button_exit['..get_rect(v)..';'..form_esc(v.name)..';'..form_esc(v.label)..']"')
-                else
+                else  -- basic button
                     table.insert(display, '"button['..get_rect(v)..';'..form_esc(v.name)..';'..form_esc(v.label)..']"')
                 end
             end
             
         elseif v.type == "Field" then
-            if v.password then
+            if v.password then  -- password field
                 table.insert(display, '"pwdfield['..get_rect(v)..';'..form_esc(v.name)..';'..form_esc(v.label)..']"')
             else
                 local default = ""
-                if v.default_param then
+                if v.default_param then  -- default param
                     table.insert(parameters, name(v).."_default")
                     default = '"..minetest.formspec_escape('..name(v)..'_default).."'
                 else
@@ -617,7 +661,7 @@ local function generate_function()
                 table.insert(parameters, name(v).."_label")
                 label = '"..minetest.formspec_escape('..name(v)..'_label).."'
             end
-            if v.vertical then
+            if v.vertical then  -- vertical label
                 table.insert(display, '"vertlabel['..get_rect(v)..';'..label..']"')
             else
                 table.insert(display, '"label['..get_rect(v)..';'..label..']"')
@@ -627,12 +671,12 @@ local function generate_function()
             local items = ""
             if v.items_param then
                 table.insert(parameters, name(v).."_items")
-                before_str = before_str.. 
+                before_str = before_str..   -- add code for converting the list from a parameter to a string
                 '    local '..name(v)..'_item_str = ""\n' ..
                 '    for i, item in pairs('..name(v)..'_items) do\n' ..
                 '        if i ~= 1 then '..name(v)..'_item_str = '..name(v)..'_item_str.."," end\n' ..
                 '        '..name(v)..'_item_str = '..name(v)..'_item_str .. minetest.formspec_escape(item)\n' ..
-                '    end\n'
+                '    end\n\n'
                 items = '"..'..name(v)..'_item_str.."'
             else
                 items = ""
@@ -642,7 +686,7 @@ local function generate_function()
                 end
             end
             if v.item_id_param or v.transparent then
-                if v.item_id_param then
+                if v.item_id_param then  -- selected item parameter
                     table.insert(parameters, name(v).."_selected_item")
                     table.insert(display, '"textlist['.. get_rect(v)..';'..form_esc(v.name)..';'..items..';"..'..name(v)..'_selected_item..";'..tostring(v.transparent)..']"')
                 else
@@ -656,12 +700,12 @@ local function generate_function()
             local items = ""
             if v.items_param then
                 table.insert(parameters, name(v).."_items")
-                before_str = before_str.. 
+                before_str = before_str..   -- add code for converting the list from a parameter to a string
                 '    local '..name(v)..'_item_str = ""\n' ..
                 '    for i, item in pairs('..name(v)..'_items) do\n' ..
                 '        if i ~= 1 then '..name(v)..'_item_str = '..name(v)..'_item_str.."," end\n' ..
                 '        '..name(v)..'_item_str = '..name(v)..'_item_str .. minetest.formspec_escape(item)\n' ..
-                '    end\n'
+                '    end\n\n'
                 items = '"..'..name(v)..'_item_str.."'
             else
                 items = ""
@@ -671,7 +715,7 @@ local function generate_function()
                 end
             end
             local item_id = ""
-            if v.item_id_param then
+            if v.item_id_param then  -- selected item parameter
                 table.insert(parameters, name(v).."_selected_item")
                 item_id = '"..'..name(v)..'_selected_item.."'
             else
@@ -697,7 +741,7 @@ local function generate_function()
         
         elseif v.type == "Image" then
             local image = form_esc(v.image)
-            if v.image_param then
+            if v.image_param then  -- texture
                 table.insert(parameters, name(v).."_image")
                 image = '"..'..name(v)..'_image.."'
             end
@@ -722,7 +766,7 @@ local function generate_function()
         elseif v.type == "InvList" then
             local extras = {["player:"]=1, ["nodemeta:"]=1, ["detached:"]=1}
             local data = ""
-            if v.data_param then
+            if v.data_param then  -- extra location data needed in some locations
                 table.insert(parameters, name(v).."_data")
                 data = '"..minetest.formspec_escape('..name(v)..'_data).."'
             elseif extras[v.location] then
@@ -734,13 +778,88 @@ local function generate_function()
                 start = '"..'..name(v)..'_start_idx.."'
             end
             table.insert(display, '"list['..v.location..data..';'..form_esc(v.name)..';'..get_rect(v)..';'..start..']"')
-            if v.ring then
+            if v.ring then  -- shift clicking between item lists
                 table.insert(display, '"listring['..v.location..data..';'..form_esc(v.name)..']"')
             end
         
-        elseif v.type == "Container - Start" then
+        elseif v.type == "Table" then
+            local cell_str = ""
+            local column_str = ""
+            
+            local item_param = false
+            local most_items = 0
+            for i, c in pairs(v.columns) do
+                if #c.items > most_items then  -- find how many columns are needed
+                    most_items = #c.items
+                end
+                if c.items_param then  -- find out if any parameters are needed
+                    item_param = true
+                end
+                
+                if i > 1 then  -- create a column string
+                    column_str = column_str..";"
+                end
+                column_str = column_str .. c.type
+                if c.type == "image" then  -- add list of images
+                    for n, t in pairs(c.images) do
+                        column_str = column_str..","..n .."="..t
+                    end
+                elseif c.type == "color" and c.distance ~= "infinite" then  -- and distance affected by colour
+                    column_str = column_str..",span="..c.distance
+                end
+            end
+            
+            if not item_param then  -- calculate item list if none come from parameters
+                for i=1, most_items do
+                    for n, c in pairs(v.columns) do
+                        if n > 1 or i > 1 then
+                            cell_str = cell_str..","
+                        end
+                        local item = c.items[i]
+                        if item == nil then
+                            item = ""
+                        end
+                        cell_str = cell_str..item
+                    end
+                end
+            else  -- or add the code to convert the items from the parameters into a string
+                local items = "    local "..name(v).."_cells = {"
+                for i, c in pairs(v.columns) do
+                    if c.items_param then
+                        table.insert(parameters, name(v).."_col_"..i.."_items")
+                        items = items.."\n        ["..i.."]="..name(v).."_col_"..i.."_items,"
+                    else
+                        local item_str = "{"  -- create a string table with the items
+                        for n, item in pairs(c.items) do
+                            item_str = item_str..'"'..item..'", '
+                        end
+                        item_str = item_str.."}"
+                        items = items.."\n        ["..i.."]="..item_str..","
+                    end
+                end
+                items = items.."\n    }\n"
+                
+                table_items = true  -- this makes it add the function onto the start of the function
+                before_str = before_str..items ..
+                '    local '..name(v)..'_cell_str = table_item_str('..name(v)..'_cells)\n\n'
+                
+                cell_str = '"..'..name(v)..'_cell_str.."'
+            end
+            
+            if column_str:len() > 0 then  -- tablecolumns without columns gives an error
+                table.insert(display, '"tablecolumns['..column_str..']"')
+            end
+            
+            local selected = ""
+            if v.select_param then  -- selected item parameter
+                table.insert(parameters, name(v).."_selected_item")
+                selected = '"..'..name(v)..'_selected_item.."'
+            end
+            table.insert(display, '"table['..get_rect(v)..";"..form_esc(v.name)..';'..cell_str..';'..selected..']"')
+        
+        elseif v.type == "Container - Start" then  -- container has 2 sections
             local l = v.left
-            if v.left_param then
+            if v.left_param then  -- the only widget which can hve position parameters
                 table.insert(parameters, name(v).."_left")
                 l = name(v)..'_left'
             end
@@ -749,9 +868,9 @@ local function generate_function()
                 table.insert(parameters, name(v).."_top")
                 t = name(v)..'_top'
             end
-            local rect = get_rect(v, true, l, t)
+            local rect = get_rect(v, true, l, t)  -- the area is returned as a table this time
             dep = dep+1
-            if type(rect.width) == "string" then
+            if type(rect.width) == "string" then  -- if it is a calculation, and not the calculated value
                 width[dep] = "("..rect.width..")"
             else
                 width[dep] = rect.width
@@ -759,7 +878,7 @@ local function generate_function()
             if type(rect.height) == "string" then
                 height[dep] = "("..rect.height..")"
             else
-                height[dep] = rect.height            
+                height[dep] = rect.height
             end
             if type(rect.left) == "string" then
                 rect.left = '"..'..rect.left..' .."'
@@ -768,14 +887,41 @@ local function generate_function()
                 rect.top = '"..'..rect.top..' .."'
             end
             table.insert(display, '"container['..rect.left..','..rect.top..']"')
-        elseif v.type == "Container - End" then
+        elseif v.type == "Container - End" then  -- only exits the table
             dep = dep-1
             table.insert(display, '"container_end[]"')
             
         end
     end
     
-    param_str = ""
+    if table_items then  -- the function generating a string from a list of column items
+        before_str = '' ..  -- added if a table uses parameters
+        '    local function table_item_str(cells)\n' ..
+        '        local most_items = 0\n' ..
+        '        for i, v in pairs(cells) do\n' ..
+        '            if #v > most_items then\n' ..
+        '                most_items = #v\n' ..
+        '            end\n' ..
+        '        end\n' ..
+        '        local cell_str = ""\n' ..
+        '        for i=1, most_items do\n' ..
+        '            for n=1, #cells do\n' ..
+        '                if n > 1 or i > 1 then ' ..
+        'cell_str = cell_str.."," ' ..
+        'end\n' ..
+        '                local item = cells[n][i]\n' ..
+        '                if item == nil then ' ..
+        'item = "" ' ..
+        'end\n' ..
+        '                cell_str = cell_str..minetest.formspec_escape(item)\n' ..
+        '            end\n' ..
+        '        end\n' ..
+        '        return cell_str\n' ..
+        '    end\n\n' ..
+        before_str
+    end
+    
+    param_str = ""  -- creates the parameter string --> "param1, param2, paramN"
     for i, v in pairs(parameters) do
         if i ~= 1 then
             param_str = param_str .. ", "
@@ -783,23 +929,29 @@ local function generate_function()
         param_str = param_str .. v
     end
     
-    form = form .. "function generate_form("..param_str..")\n" .. before_str .. '\n    form = "" ..\n'
+    -- puts the first part of the function together
+    form = form .. "function generate_form("..param_str..")\n" .. before_str .. '\n    local form = "" ..\n'
     
-    for i, v in pairs(display) do
+    for i, v in pairs(display) do  -- adds the widget strings
         form = form .. "    "..v.." ..\n"
     end
     
-    form = form .. '    ""\n\n    return form\nend'
+    form = form .. '    ""\n\n    return form\nend'  -- completes it
     
     return form
 end
 
+-- generates a string for a static UI
 local function generate_string()
+    local form_esc = function(str)  -- escape symbols need to be escaped with escaped escape symbols ;p
+        return string.gsub(minetest.formspec_escape(str), "\\", "\\\\")
+    end
+    
     local fwidth = {0}
     local fheight = {0}
     local dep = 1
     
-    local function get_rect(widget, real)
+    local function get_rect(widget, real)  -- can't be bothered commenting this. see function on line 73, it is basically the same...
         local wleft = 0
         if widget.left_type == "R-" then
             wleft = fwidth[dep]-widget.left
@@ -853,7 +1005,7 @@ local function generate_string()
     
     local output = ""
     
-    for i, v in pairs(widgets) do
+    for i, v in pairs(widgets) do  -- go through all the widgets and create their strings
         
         if v.type == "Size" then
             fwidth = {v.width}
@@ -943,15 +1095,55 @@ local function generate_string()
                     output = output .. "\"listring["..v.location..";"..form_esc(v.name).."]\" ..\n"
                 end
             end
+        elseif v.type == "Table" then
+            local cell_str = ""
+            local column_str = ""
+            
+            -- this converts the column's individual item lists into a string
+            local most_items = 0
+            for i, c in pairs(v.columns) do
+                if #c.items > most_items then
+                    most_items = #c.items  -- gets the largest size
+                end
+                
+                if i > 1 then
+                    column_str = column_str..";"
+                end
+                column_str = column_str .. c.type  -- creates the column list
+                -- adds column parameters \/
+                if c.type == "image" then
+                    for n, t in pairs(c.images) do
+                        column_str = column_str..","..n .."="..t
+                    end
+                elseif c.type == "color" and c.distance ~= "infinite" then
+                    column_str = column_str..",span="..c.distance
+                end
+            end
+            for i=1, most_items do  -- adds all the items together
+                for n, c in pairs(v.columns) do
+                    if n > 1 or i > 1 then
+                        cell_str = cell_str..","
+                    end
+                    local item = c.items[i]
+                    if item == nil then  -- columns with less items get blank items to make them the same length
+                        item = ""
+                    end
+                    cell_str = cell_str..item
+                end
+            end
+            if column_str:len() > 0 then
+                output = output .. "\"tablecolumns["..column_str.."]\" ..\n"
+            end
+            output = output .. "\"table["..get_rect(v)..form_esc(v.name)..";"..cell_str..";]\" ..\n"
             
         elseif v.type == "Container - Start" then
             local rect = get_rect(v, true)
-            fwidth[dep+1] = rect.width
+            fwidth[dep+1] = rect.width  -- set the width and height that widgets in the container use
             fheight[dep+1] = rect.height
             dep = dep+1
             output = output .. "\"container["..rect.left..","..rect.top.."]\" ..\n"
         elseif v.type == "Container - End" then
-            dep = dep-1
+            dep = dep-1  -- close container
             output = output .. "\"container_end[]\" ..\n"
         
         end
@@ -959,12 +1151,12 @@ local function generate_string()
     return output .. '""'
 end
 
-
 ----------
 -- UI Editors
 ----------
 
-local function ui_position(name, value, left, top, typ, typ_id)  -- creates a position chooser with << and >> buttond, text box, and position type (if needed)
+-- creates a position chooser with << and >> buttons, text box, and position type (if needed)
+local function ui_position(name, value, left, top, typ, typ_id)
     name = form_esc(name)
     local form = ""..
     "label["..left+0.1 ..","..top-0.3 ..";"..name.."]" ..
@@ -973,8 +1165,8 @@ local function ui_position(name, value, left, top, typ, typ_id)  -- creates a po
     "field_close_on_enter["..name.."_size;false]" ..
     "button["..left+1.9 ..","..top..";1,1;"..name.."_size_up;>>]"
     local typ_ids = {["L+"]=1, ["T+"]=1, ["R-"]=2, ["B-"]=2, ["W/"]=3, ["H/"]=3, ["R"]=4}
-    if typ == "LEFT" then
-        if name == "RIGHT" then
+    if typ == "LEFT" then  -- left and right sides use this type
+        if name == "RIGHT" then  -- but right has a relative option (I should make it right type, but I decided much later to include it)
             form = form .."dropdown["..left+3 ..","..top+0.1 ..";1.1,1;"..name.."_type;LEFT +,RIGHT -,WIDTH /,RELATIVE;"..typ_ids[typ_id].."]"
         else        
             form = form .. "dropdown["..left+3 ..","..top+0.1 ..";1.1,1;"..name.."_type;LEFT +,RIGHT -,WIDTH /;"..typ_ids[typ_id].."]"
@@ -989,33 +1181,34 @@ local function ui_position(name, value, left, top, typ, typ_id)  -- creates a po
     return form
 end
 
-local function handle_position_changes(id, fields, range)  -- handles position ui functionality
-    local pos_names = {"width", "height", "left", "top", "right", "bottom", "value"}
+-- handles position ui functionality
+local function handle_position_changes(id, fields, range)
+    local pos_names = {"width", "height", "left", "top", "right", "bottom", "value"}  -- the only names it will check
     for i, v in pairs(pos_names) do
-        if fields[string.upper(v).."_size_down"] then
+        if fields[string.upper(v).."_size_down"] then  -- down button
             if range and range[v] then
-                widgets[id][v] = widgets[id][v] - range[v]/10
+                widgets[id][v] = widgets[id][v] - range[v]/10  -- slider uses a different step
             else
                 widgets[id][v] = widgets[id][v] - 0.1
             end
             if widgets[id][v] < 0.0001 and widgets[id][v] > -0.0001 then widgets[id][v] = 0 end  -- weird number behaviour
-        elseif fields[string.upper(v).."_size_up"] then
+        elseif fields[string.upper(v).."_size_up"] then  -- up button
             if range and range[v] then
                 widgets[id][v] = widgets[id][v] + range[v]/10
             else
                 widgets[id][v] = widgets[id][v] + 0.1
             end
-            if widgets[id][v] < 0.0001 and widgets[id][v] > -0.0001 then widgets[id][v] = 0 end
-        elseif fields.key_enter_field == string.upper(v).."_size" then
+            if widgets[id][v] < 0.0001 and widgets[id][v] > -0.0001 then widgets[id][v] = 0 end  -- weird number behaviour
+        elseif fields.key_enter_field == string.upper(v).."_size" then  -- size edit box/displayer
             local value = tonumber(fields[string.upper(v).."_size"])
             if value ~= nil then
                 widgets[id][v] = value
             end
-        elseif fields[string.upper(v).."_type"] then
+        elseif fields[string.upper(v).."_type"] then  -- type selector
             local typ_trans = {["LEFT +"]="L+", ["RIGHT -"]="R-", ["WIDTH /"]="W/", ["TOP +"]="T+", ["BOTTOM -"]="B-", ["HEIGHT /"]="H/", ["RELATIVE"]="R"}
             widgets[id][v.."_type"] = typ_trans[fields[string.upper(v).."_type"]]
         end
-        if range then
+        if range then  -- sometimes the number must be within a range
             if range[v] then
                 if widgets[id][v] < 0 then
                     widgets[id][v] = 0
@@ -1027,7 +1220,8 @@ local function handle_position_changes(id, fields, range)  -- handles position u
     end
 end
 
-local function ui_field(name, value, left, top, param)  -- creates a field to edit name or other attributes
+-- creates a field to edit name or other attributes, and a parameter checkbox (if needed)
+local function ui_field(name, value, left, top, param)
     name = form_esc(name)
     local field = "" ..
     "field["..left+0.2 ..","..top..";2.8,1;"..name.."_input_box;"..name..";"..form_esc(value).."]" ..
@@ -1038,8 +1232,9 @@ local function ui_field(name, value, left, top, param)  -- creates a field to ed
     return field
 end
 
-local function handle_field_changes(names, id, fields)  -- handle field functionality
-    for i, v in pairs(names) do
+-- handles field functionality
+local function handle_field_changes(names, id, fields)
+    for i, v in pairs(names) do  -- names are supplied this time, so only nececary ones are checked
         if fields.key_enter_field == string.upper(v).."_input_box" then
             widgets[id][v] = fields[string.upper(v).."_input_box"]
         elseif fields[string.upper(v).."_param_box"] then
@@ -1050,16 +1245,18 @@ end
 
 ----------
 -- individual widget definitions
+
+-- functions for widget's custom editing UIs at the side
 local widget_editor_uis = {
-    Size = {
-        ui = function(id, left, top, width)
+    Size = {  -- type can be seen here, etc, extra tabs (options, new widget) are at the end
+        ui = function(id, left, top, width)  -- function for creating the form
             local form = "label["..left+2 ..","..top ..";-  SIZE  -]" ..
             ui_position("WIDTH", widgets[id].width, left, top+0.7) ..
             ui_position("HEIGHT", widgets[id].height, left, top+1.7) ..
             "checkbox["..left+3 ..","..top+0.7 ..";WIDTH_param_box;parameter;"..tostring(widgets[id].width_param).."]" ..
             "checkbox["..left+3 ..","..top+1.7 ..";HEIGHT_param_box;parameter;"..tostring(widgets[id].height_param).."]"
             
-            if widgets[id].position then
+            if widgets[id].position then  -- this part only gets displayed if the position checkbox is checked
                 form = form .. 
                 ui_position("LEFT", widgets[id].left, left, top+2.7) ..
                 ui_position("TOP", widgets[id].top, left, top+3.7) ..
@@ -1069,7 +1266,7 @@ local widget_editor_uis = {
             end
             return form
         end,
-        func = function(id, fields)
+        func = function(id, fields)  -- function for handling the form
             handle_position_changes(id, fields, {left=1, top=1})
             if fields.WIDTH_param_box then
                 widgets[id].width_param = fields.WIDTH_param_box == "true"
@@ -1079,7 +1276,7 @@ local widget_editor_uis = {
             elseif fields.pos_box then
                 widgets[id].position = fields.pos_box == "true"
             end
-            reload()
+            reload_ui()  -- refresh the display and save the file
         end
     },
     
@@ -1087,12 +1284,12 @@ local widget_editor_uis = {
         ui = function(id, left, top, width)
             local form = "label["..left+1.8 ..","..top ..";-  BUTTON  -]" ..
             "button["..left+3.9 ..","..top ..";1,1;delete;Delete]" ..
-            ui_field("NAME", widgets[id].name, left+0.2, top+0.7) ..
-            ui_position("LEFT", widgets[id].left, left, top+1.4, "LEFT", widgets[id].left_type) ..
+            ui_field("NAME", widgets[id].name, left+0.2, top+0.7) ..  -- all have a name box
+            ui_position("LEFT", widgets[id].left, left, top+1.4, "LEFT", widgets[id].left_type) ..  -- and an area or position
             ui_position("TOP", widgets[id].top, left, top+2.4, "TOP", widgets[id].top_type) ..
             ui_position("RIGHT", widgets[id].right, left, top+3.4, "LEFT", widgets[id].right_type) ..
             ui_position("BOTTOM", widgets[id].bottom, left, top+4.4, "TOP", widgets[id].bottom_type) ..
-            ui_field("LABEL", widgets[id].label, left+0.2, top+5.7) ..
+            ui_field("LABEL", widgets[id].label, left+0.2, top+5.7) ..  -- then extra things
             ""
             if widgets[id].image then
                 form = form ..
@@ -1113,7 +1310,7 @@ local widget_editor_uis = {
         func = function(id, fields)
             handle_position_changes(id, fields)
             handle_field_changes({"name", "label", "texture"}, id, fields)
-            if fields.delete then
+            if fields.delete then  -- delete button is standard
                 table.remove(widgets, id)
                 
             elseif fields.image_box then
@@ -1128,7 +1325,7 @@ local widget_editor_uis = {
             elseif fields.close_box then
                 widgets[id].exit = fields.close_box == "true"
             end
-            reload()
+            reload_ui()
         end
     },
     
@@ -1166,7 +1363,7 @@ local widget_editor_uis = {
             elseif fields.enter_close_box then
                 widgets[id].enter_close = fields.enter_close_box == "true"
             end
-            reload()
+            reload_ui()
         end
     },
     
@@ -1181,7 +1378,6 @@ local widget_editor_uis = {
             ui_position("BOTTOM", widgets[id].bottom, left, top+4.7, "TOP", widgets[id].bottom_type) ..
             ui_field("LABEL", widgets[id].label, left+0.2, top+6) ..
             ui_field("DEFAULT", widgets[id].default, left+0.2, top+7, widgets[id].default_param) ..
-            
             ""
             
             return form
@@ -1192,7 +1388,7 @@ local widget_editor_uis = {
             if fields.delete then
                 table.remove(widgets, id)
             end
-            reload()
+            reload_ui()
         end
     },
     
@@ -1217,7 +1413,7 @@ local widget_editor_uis = {
             elseif fields.vert_box then
                 widgets[id].vertical = fields.vert_box == "true"
             end
-            reload()
+            reload_ui()
         end
     },
     
@@ -1253,11 +1449,12 @@ local widget_editor_uis = {
             handle_field_changes({"name"}, id, fields)
             if fields.delete then
                 table.remove(widgets, id)
-            elseif fields.item_list then
-                if string.sub(fields.item_list, 1, 3) == "DCL" then
+                
+            elseif fields.item_list then  -- common (lazy) way I make editable lists
+                if string.sub(fields.item_list, 1, 3) == "DCL" then  -- remove
                     table.remove(widgets[id].items, tonumber(string.sub(fields.item_list, 5)))
                 end
-            elseif fields.key_enter_field == "item_input" then
+            elseif fields.key_enter_field == "item_input" then  -- add
                 table.insert(widgets[id].items, fields.item_input)
                 
             elseif fields.items_param_box then
@@ -1269,7 +1466,7 @@ local widget_editor_uis = {
             elseif fields.transparent_box then
                 widgets[id].transparent = fields.transparent_box == "true"
             end
-            reload()
+            reload_ui()
         end
     },
     
@@ -1319,7 +1516,7 @@ local widget_editor_uis = {
             elseif fields.item_id_param_box then
                 widgets[id].item_id_param = fields.item_id_param_box == "true"
             end
-            reload()
+            reload_ui()
         end
     },
     
@@ -1348,7 +1545,7 @@ local widget_editor_uis = {
             elseif fields.checked_param_box then
                 widgets[id].checked_param = fields.checked_param_box == "true"
             end
-            reload()
+            reload_ui()
         end
     },
     
@@ -1372,7 +1569,7 @@ local widget_editor_uis = {
             if fields.delete then
                 table.remove(widgets, id)
             end
-            reload()
+            reload_ui()
         end
     },
     
@@ -1400,7 +1597,7 @@ local widget_editor_uis = {
             elseif fields.item_box then
                 widgets[id].item = fields.item_box == "true"
             end
-            reload()
+            reload_ui()
         end
     },
     
@@ -1430,12 +1627,12 @@ local widget_editor_uis = {
                 widgets[id].value_param = fields.value_param_box == "true"
             elseif fields.orientation then
                 local new = fields.orientation == "vertical"
-                if widgets[id].vertical ~= new then
+                if widgets[id].vertical ~= new then  -- swaps the width and height to make it nicer to edit
                     widgets[id].vertical = new
                     widgets[id].right, widgets[id].bottom = widgets[id].bottom, widgets[id].right
                 end
             end
-            reload()
+            reload_ui()
         end
     },
     
@@ -1454,7 +1651,7 @@ local widget_editor_uis = {
             "checkbox["..left+0.11 ..","..top+6.3 ..";page_box;page param;"..tostring(widgets[id].page_param).."]" ..
             "checkbox["..left+0.11 ..","..top+6.7 ..";ring_box;ring;"..tostring(widgets[id].ring).."]"
             
-            local extras = {["player:"]=1, ["nodemeta:"]=1, ["detached:"]=1}
+            local extras = {["player:"]=1, ["nodemeta:"]=1, ["detached:"]=1}  -- these locations need extra data
             if extras[widgets[id].location] then
                 form = form .. "field["..left+3.3 ..","..top+5 ..";1.7,1;data;DATA;"..form_esc(widgets[id].data).."]" ..
                 "field_close_on_enter[data;false]" ..
@@ -1480,7 +1677,7 @@ local widget_editor_uis = {
             elseif fields.location_select then
                 widgets[id].location = fields.location_select
             end
-            reload()
+            reload_ui()
         end
     },
     
@@ -1490,7 +1687,7 @@ local widget_editor_uis = {
             for i, v in pairs(widgets[id].columns) do
                 column_str = column_str..","..i..": "..v.type
             end
-            local form = "label["..left+1.8 ..","..top ..";-  Table (unfinished)  -]" ..
+            local form = "label["..left+1.8 ..","..top ..";-  Table  -]" ..
             "button["..left+3.9 ..","..top ..";1,1;delete;Delete]" ..
             "textlist["..left+0.1 ..","..top+0.4 ..";2.5,1.5;column_select;#ffff00DATA,#ffff00- columns: "..column_str..";"..widgets[id].selected_column+2 ..";]" ..
             "button["..left+2.7 ..","..top+0.3 ..";0.5,1;column_up;/\\\\]" ..
@@ -1498,19 +1695,20 @@ local widget_editor_uis = {
             "button["..left+3.1 ..","..top+0.3 ..";0.8,1;column_add;+]" ..
             "button["..left+3.1 ..","..top+1.15 ..";0.8,1;column_remove;-]"
             
-            if widgets[id].selected_column == -1 then
+            if widgets[id].selected_column == -1 then  -- the data tab (size, name, etc)
                 form = form .. ui_field("NAME", widgets[id].name, left+0.2, top+2.5) ..
                 ui_position("LEFT", widgets[id].left, left, top+3.2, "LEFT", widgets[id].left_type) ..
                 ui_position("TOP", widgets[id].top, left, top+4.2, "TOP", widgets[id].top_type) ..
                 ui_position("RIGHT", widgets[id].right, left, top+5.2, "LEFT", widgets[id].right_type) ..
-                ui_position("BOTTOM", widgets[id].bottom, left, top+6.2, "TOP", widgets[id].bottom_type)
+                ui_position("BOTTOM", widgets[id].bottom, left, top+6.2, "TOP", widgets[id].bottom_type) ..
+                "checkbox["..left+0.1 ..","..top+6.9 ..";select_param_box;selected item param;"..tostring(widgets[id].select_param).."]"
                 
-            elseif widgets[id].selected_column > 0 then
+            elseif widgets[id].selected_column > 0 then  -- item controller
                 local c = widgets[id].columns[widgets[id].selected_column]
                 typ_convt = {text=1, image=2, color=3, indent=4, tree=5}
                 local items_str = ""
                 for i, v in pairs(c.items) do
-                    items_str = items_str..v..","
+                    items_str = items_str..i..": "..v..","
                 end
                 form = form .. "label["..left+0.1 ..","..top+1.9 ..";TYPE]" ..
                 "dropdown["..left+0.1 ..","..top+2.3 ..";2.7,1;column_type;text,image,color,indent,tree;"..typ_convt[c.type].."]" ..
@@ -1519,26 +1717,46 @@ local widget_editor_uis = {
                 "button["..left+2.7 ..","..top+3.2 ..";0.5,1;item_up;/\\\\]" ..
                 "button["..left+2.7 ..","..top+4.05 ..";0.5,1;item_down;\\\\/]" ..
                 "button["..left+3.1 ..","..top+3.2 ..";0.8,1;item_add;+]" ..
-                "button["..left+3.1 ..","..top+4.05 ..";0.8,1;item_remove;-]"
+                "button["..left+3.1 ..","..top+4.05 ..";0.8,1;item_remove;-]" ..
+                "checkbox["..left+2.7 ..","..top+4.6 ..";item_param_box;items parameter;"..tostring(c.items_param).."]"
                 
-                if #c.items > 0 then
+                if #c.items > 0 then  -- item editor
                     form = form .. "field["..left+0.4 ..","..top+5.4 ..";2.5,1;item_edit;ITEM;"..c.items[c.selected_item].."]" ..
                     "field_close_on_enter[item_edit;false]"
+                    
+                    -- some column types need extra stuff
+                    if c.type == "image" then  -- image
+                        local img_str = ""
+                        for i, v in pairs(c.images) do
+                            img_str = img_str..i ..": "..v..","
+                        end
+                        form = form .. "label["..left+0.1 ..","..top+5.8 ..";IMAGES]" ..
+                        "textlist["..left+0.1 ..","..top+6.2 ..";2.5,1.4;image_lst;"..img_str.."]" ..
+                        "field["..left+3 ..","..top+6.4 ..";2,1;image_add;;]" ..
+                        "field_close_on_enter[image_add;false]"
+                    elseif c.type == "color" then  -- colour
+                        form = form .. "field["..left+0.4 ..","..top+6.4 ..";2.5,1;colour_len;DISTANCE;"..c.distance.."]" ..
+                        "field_close_on_enter[colour_len;false]"
+                    end
                 end
             end
             
             return form
         end,
         func = function(id, fields)
+            -- basic stuff
             handle_position_changes(id, fields)
             handle_field_changes({"name"}, id, fields)
+            local number_usrs = {indent=1, tree=1, image=1}
             local c = widgets[id].columns[widgets[id].selected_column]
             if fields.delete then
                 table.remove(widgets, id)
+                
+            -- column selector and editor
             elseif fields.column_select then
                 widgets[id].selected_column = tonumber(string.sub(fields.column_select, 5))-2
-            elseif fields.column_add then
-                table.insert(widgets[id].columns, {type="text", items={}, selected_item=1, items_param=false, options={[0]="default_cloud.png"}})
+            elseif fields.column_add then  -- column def
+                table.insert(widgets[id].columns, {type="text", items={}, images={}, selected_item=1, items_param=false, distance="infinite"})
                 widgets[id].selected_column = #widgets[id].columns
             elseif fields.column_remove and widgets[id].selected_column > 0 then
                 table.remove(widgets[id].columns, widgets[id].selected_column)
@@ -1549,14 +1767,22 @@ local widget_editor_uis = {
             elseif fields.column_up and widgets[id].selected_column > 1 then
                 table.insert(widgets[id].columns, widgets[id].selected_column-1, table.remove(widgets[id].columns, widgets[id].selected_column))
                 widgets[id].selected_column = widgets[id].selected_column-1
-                
+            
+            elseif fields.select_param_box then
+                widgets[id].select_param = fields.select_param_box == "true"
+            
+            -- item editor
             elseif fields.item_lst then
                 c.selected_item = tonumber(string.sub(fields.item_lst, 5))
                 if c.selected_item > #c.items then
                     c.selected_item = #c.items
                 end
             elseif fields.item_add then
-                table.insert(c.items, "New Item")
+                if number_usrs[c.type] then
+                    table.insert(c.items, 0)
+                else
+                    table.insert(c.items, "-")
+                end
                 c.selected_item = #c.items
             elseif fields.item_remove then
                 table.remove(c.items, c.selected_item)
@@ -1569,10 +1795,12 @@ local widget_editor_uis = {
             elseif fields.item_up and c.selected_item > 1 then
                 table.insert(c.items, c.selected_item-1, table.remove(c.items, c.selected_item))
                 c.selected_item = c.selected_item-1
+            
+            elseif fields.item_param_box then
+                c.items_param = fields.item_param_box == "true"
                 
             elseif fields.key_enter_field == "item_edit" then
                 c.items[c.selected_item] = fields.item_edit
-                local number_usrs = {indent=1, tree=1}
                 if number_usrs[c.type] then
                     c.items[c.selected_item] = tonumber(fields.item_edit)
                     if c.items[c.selected_item] == nil then
@@ -1580,12 +1808,33 @@ local widget_editor_uis = {
                     end
                     c.items[c.selected_item] = math.floor(c.items[c.selected_item])
                 end
-                
+            
+            -- extra things for column types
+            elseif fields.key_enter_field == "image_add" then
+                table.insert(c.images, fields.image_add)
+            elseif fields.image_lst and string.sub(fields.image_lst, 1, 3) == "DCL" then
+                table.remove(c.images, tonumber(string.sub(fields.image_lst, 5)))
+            
+            elseif fields.colour_len then
+                c.distance = tonumber(fields.colour_len)
+                if c.distance == nil or c.distance <= 0 then
+                    c.distance = "infinite"
+                else
+                    c.distance = math.floor(c.distance)
+                end
                 
             elseif fields.column_type then
                 c.type = fields.column_type
+                if number_usrs[c.type] then
+                    for i, v in pairs(c.items) do
+                        c.items[i] = tonumber(v)
+                        if c.items[i] == nil then
+                            c.items[i] = 0
+                        end
+                    end
+                end
             end
-            reload()
+            reload_ui()
         end
     },
     
@@ -1612,7 +1861,7 @@ local widget_editor_uis = {
             if fields.delete then
                 table.remove(widgets, id)
                 local depth = 0
-                while id <= #widgets and depth > -1 do
+                while id <= #widgets and depth > -1 do  -- find which container end belongs to this container and delete it too
                     if widgets[id].type == "Container - Start" then
                         depth = depth+1
                     elseif widgets[id].type == "Container - End" then
@@ -1631,7 +1880,7 @@ local widget_editor_uis = {
                 widgets[id].top_param = fields.top_param_box == "true"
             end
             
-            reload()
+            reload_ui()
         end
     },
     
@@ -1640,7 +1889,7 @@ local widget_editor_uis = {
             local name = ""
             local depth = 0
             local pos = id-1
-            while pos > 0 and depth > -1 do
+            while pos > 0 and depth > -1 do  -- find which container start belongs to this container and display it's name
                 if widgets[pos].type == "Container - Start" then
                     if depth == 0 then
                         name = widgets[pos].name
@@ -1658,19 +1907,19 @@ local widget_editor_uis = {
             return form
         end,
         func = function(id, fields)
-        
-            reload()
+            -- ehem?
         end
     },
     
     Help = {
         ui = function(id, left, top, width)
             local form = ""
-            
+            -- can't remember why I made this...
+            -- there will be a seperate help tab
             return form
         end,
         func = function(id, fields)
-        
+            -- this is a good blank template though
             reload()
         end
     },
@@ -1680,30 +1929,34 @@ local widget_editor_uis = {
             local form = "label["..left+1.8 ..","..top ..";-  Options  -]" ..
             "button["..left+0.1 ..","..top+1 ..";2,1;func_create;generate function]" ..
             "button["..left+2.1 ..","..top+1 ..";2,1;string_create;generate string]" ..
+            "field["..left+0.4 ..","..top+3 ..";3,1;open;LOAD FILE (temporary);"..form_esc(current_ui_file).."]" ..  -- (temporary)
+            "field_close_on_enter[open;false]" ..
             ""
             
             return form
         end,
         func = function(id, fields)
-            if fields.string_create then
+            if fields.string_create then  -- display the formspec to output the generated string (and generate it)
                 minetest.show_formspec("ui_editor:output", 
                 "size[10,8]" ..
                 "textarea[1,1;9,7;_;Generated Code;"..form_esc(generate_string()).."]" ..
                 "button[8.8,0;1,1;back;back]")
-            elseif fields.func_create then
+            elseif fields.func_create then  -- display the (same) formspec to output the generated function (and generate it)
                 minetest.show_formspec("ui_editor:output", 
                 "size[10,8]" ..
                 "textarea[1,1;9,7;_;Generated Code;"..form_esc(generate_function()).."]" ..
                 "button[8.8,0;1,1;back;back]")
-            else
-                reload()
+            
+            elseif fields.key_enter_field == "open" then  -- the temporary field for loading files
+                load_UI(fields.open)
+                reload_ui()
             end
         end
     },
     
     New = {
         ui = function(id, left, top, width)
-            local widg_str = ""
+            local widg_str = ""  -- convert the list of widget types to a string
             for i, v in pairs(widg_list) do
                 widg_str = widg_str..v..","
             end
@@ -1718,6 +1971,8 @@ local widget_editor_uis = {
                     local name = widg_list[tonumber(string.sub(fields.new_widg_selector, 5))]
                     selected_widget = #widgets +1
                     
+                    -- widget defaults --
+                    -- create widgets with the correct and default data
                     if name == "Button" then
                         table.insert(widgets, {type="Button", name="New Button", label="New", image=false, image_param=false, texture="default_cloud.png", item=false,
                         left=1, left_type="L+", top=1, top_type="T+", right=2, right_type="L+", bottom=1, bottom_type="R"})
@@ -1758,11 +2013,12 @@ local widget_editor_uis = {
                         left=1, left_type="L+", top=1, top_type="T+", right=2, right_type="L+", bottom=2, bottom_type="T+"})
                         
                     elseif name == "Slider" then
-                        table.insert(widgets, {type="Slider", name="New Slider", vertical=false, value=0.5, value_param=false,
-                        left=1, left_type="L+", top=1, top_type="T+", right=2, right_type="L+", bottom=1.3, bottom_type="T+"})
+                        table.insert(widgets, {type="Slider", name="New Slider", vertical=false, value=0, value_param=false,
+                        left=1, left_type="L+", top=1, top_type="T+", right=2, right_type="R", bottom=0.3, bottom_type="R"})
                     
                     elseif name == "Table" then
-                        table.insert(widgets, {selected_column=-1, type="Table", name="New Table", selected_param=false, columns = {},
+                        table.insert(widgets, {selected_column=-1, type="Table", name="New Table", selected_param=false, columns = {}, 
+                        select_param=false,
                         left=1, left_type="L+", top=1, top_type="T+", right=2, right_type="L+", bottom=2, bottom_type="T+"})
                     
                     elseif name == "InvList" then
@@ -1776,7 +2032,7 @@ local widget_editor_uis = {
                         table.insert(widgets, {type="Container - End", name=""})
                     end
                     
-                    reload()
+                    reload_ui()
                 end
             end
         end
@@ -1785,19 +2041,22 @@ local widget_editor_uis = {
 }
 
 
--- ######
+----------
+-- GENERAL
+----------
 
+-- handles formspec input, or sends to correct places
 minetest.register_on_formspec_input(function(formname, fields)
     if formname == "ui_editor:main" then
-        if fields.widg_select then
+        if fields.widg_select then  -- select a widget
             selected_widget = tonumber(string.sub(fields.widg_select, 5))-5
-            minetest.show_formspec("ui_editor:main", main_form())
+            minetest.show_formspec("ui_editor:main", main_ui_form())
         
-        elseif fields.widg_mov_up then
+        elseif fields.widg_mov_up then  -- move a widget up
             if selected_widget > 2 then
                 if widgets[selected_widget].type == "Container - End" and widgets[selected_widget-1].type == "Container - Start" then
-                    local pos = selected_widget-2
-                    local count = 0
+                    local pos = selected_widget-2  -- containers must always make sence. each start must have an end after it,
+                    local count = 0  --            -- so they can't move past eachother in some cases
                     while pos > 0 do
                         if widgets[pos].type == "Container - End" then
                             count = count-1
@@ -1808,15 +2067,15 @@ minetest.register_on_formspec_input(function(formname, fields)
                     end
                     if count <= 0 then return true end
                 end
-                table.insert(widgets, selected_widget-1, table.remove(widgets, selected_widget))
+                table.insert(widgets, selected_widget-1, table.remove(widgets, selected_widget))  -- move it
                 selected_widget = selected_widget-1
-                reload()
+                reload_ui()
             end
             
-        elseif fields.widg_mov_dwn then
+        elseif fields.widg_mov_dwn then  --move a widget down
             if selected_widget < #widgets and selected_widget > 1 then
                 if widgets[selected_widget].type == "Container - Start" and widgets[selected_widget+1].type == "Container - End" then
-                    local pos = selected_widget+2
+                    local pos = selected_widget+2  -- containers must have an end after them (and can't share an end)
                     local count = 0
                     while pos <= #widgets do
                         if widgets[pos].type == "Container - End" then
@@ -1830,10 +2089,10 @@ minetest.register_on_formspec_input(function(formname, fields)
                 end
                 table.insert(widgets, selected_widget+1, table.remove(widgets, selected_widget))
                 selected_widget = selected_widget+1
-                reload()
+                reload_ui()
             end
             
-        elseif fields.quit == nil then
+        elseif fields.quit == nil then  -- send update to widget editors
             if selected_widget > 0 then
                 widget_editor_uis[widgets[selected_widget].type].func(selected_widget, fields)
             elseif selected_widget == -2 then
@@ -1845,20 +2104,20 @@ minetest.register_on_formspec_input(function(formname, fields)
             end
         end
     
-    elseif formname == "ui_editor:output" then
+    elseif formname == "ui_editor:output" then  -- the display for outputting generated code
         if fields.back then
-            reload()
+            reload_ui()
         end
     end
 end)
--- ##
 
+-- loads the correct widget editor
 local function widget_editor(left, height)
     local form = "box["..left+0.1 ..",2.2;4.8,"..height-2.3 ..";#000000]"
     if selected_widget == -1 or selected_widget == 0 or (selected_widget > 1 and widgets[selected_widget] == nil) then
-        selected_widget = -2
+        selected_widget = -2  -- blank items in the list can be used for adding new widgets
     end
-    if selected_widget > 0 then
+    if selected_widget > 0 then  -- load correct editor for current selected widget
         form = form .. widget_editor_uis[widgets[selected_widget].type].ui(selected_widget, left+0.1, 2.2, 4.8)
     elseif selected_widget == -4 then
         form = form .. widget_editor_uis["Help"].ui(selected_widget, left+0.1, 2.2, 4.8)
@@ -1871,16 +2130,16 @@ local function widget_editor(left, height)
     return form
 end
 
-
+-- creates the widget selector
 local function widget_chooser(left)
-    local widget_str = "HELP,OPTIONS,NEW WIDGET,,.....,"
+    local widget_str = "HELP,OPTIONS,NEW WIDGET,,.....,"  -- options at the top of the list
     local depth = 0
     for i, v in pairs(widgets) do
-        if v.type == "Container - End" then
+        if v.type == "Container - End" then  -- the order of end and start are because they do not need indenting
             depth = depth-1
         end
         widget_str = widget_str .. string.rep("- ", depth) .. form_esc(v.type .. ":    " .. v.name) .. ","
-        if v.type == "Container - Start" then
+        if v.type == "Container - Start" then  -- container contents gets indented
             depth = depth+1
         end
     end
@@ -1894,27 +2153,31 @@ local function widget_chooser(left)
     return form
 end
 
-
-main_form = function ()
-    local ui, width, height = generate_ui()
+-- puts the whole formspec together
+main_ui_form = function ()
+    local ui, width, height = generate_ui()  -- the preview
     
-    local w_selector = widget_chooser(width-5)
+    local w_selector = widget_chooser(width-5)  -- the widget selector
     
-    local w_editor = widget_editor(width-5, height)
+    local w_editor = widget_editor(width-5, height)  -- the widget editor
     
-    local form = ""..
+    local form = ""..  -- add everything together
     "size["..width..","..height.."]" .. 
     "box["..width-5 ..",0;5,"..height..";#ffffff]" ..
-    ui .. w_selector .. w_editor
+    ui .. w_selector .. w_editor .. create_tabs(2)  -- add the global tabs
     
     return form
 end
 
 
+---------- ----------
+-- END FORM EDITOR --
+---------- ----------
 
+-- register the chat command
 minetest.register_chatcommand("gui", {
     description = core.gettext("UI editor"),
     func = function()
-        minetest.show_formspec("ui_editor:main", main_form())
+        minetest.show_formspec("ui_editor:main", main_ui_form())
     end,
 })
