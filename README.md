@@ -37,10 +37,12 @@ screenshot:
 - restart the game
 
 ### TODO:
-- add a UI editor
+- make all functions work after the game has been loaded
+- add a UI to unregister functions which were registered from a program
+- add the UI editor to the main file
 - add a lua console
 
-UI editor progress:
+UI editor progress:  finished
 
 copy the `Form Editor preview - init.lua` file into a new client mod folder, rename it to `init.lua` and open it in minetest using `.gui` to test the current progress.
 ![Form Editor](newest%20formspec%20editor.png)
