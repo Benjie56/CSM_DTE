@@ -41,8 +41,10 @@ screenshot:
 - add a UI to unregister functions which were registered from a program
 - add the UI editor to the main file
 - add a lua console
+- add colour and tooltip ui options
+- import ui strings into the editor (?)
 
-UI editor progress:  finished
+UI editor progress:  finished... uhh, not any more! decided to do more stuff
 
 copy the `Form Editor preview - init.lua` file into a new client mod folder, rename it to `init.lua` and open it in minetest using `.gui` to test the current progress.
 ![Form Editor](newest%20formspec%20editor.png)
