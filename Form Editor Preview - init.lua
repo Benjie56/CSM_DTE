@@ -1,6 +1,9 @@
 --[[
 docs:
-https://github.com/minetest/minetest/blob/master/doc/lua_api.txt#L2370
+https://github.com/minetest/minetest/blob/master/doc/lua_api.txt#L1683
+
+
+TODO:
 
 ]]--
 
@@ -19,16 +22,29 @@ local function create_tabs(selected)
     return ""
 end
 
+local function copy_table(table)
+    local new = {}
+    for i, v in pairs(table) do
+        if type(v) == "table" then
+            v = copy_table(v)
+        end
+        new[i] = v
+    end
+    return new
+end
+
 
 ---------- ----------
 -- FORMSPEC EDITOR --
 ---------- ----------
 
-local widg_list = {"Button", "DropDown", "CheckBox", "Slider", "TextList", "Table", "Field", "TextArea", "InvList", "Label", "Image", "Box", "Container"}  -- all widget options
+local widg_list = {"Button", "DropDown", "CheckBox", "Slider", "Tabs", "TextList", "Table", "Field", "TextArea", "InvList", "Label", "Image", "Box", "Tooltip", "Container"}  -- all widget options
 
 local widgets = nil  -- stores all widget data for the current file
 
 local selected_widget = 1  -- the widget/tab currently being edited
+
+local new_widg_tab = false  -- so the new widget tab can be displayed without moving the selection
 
 local main_ui_form  -- make this function global to the rest of the program
 
@@ -37,7 +53,7 @@ local current_ui_file = modstorage:get_string("_GUI_editor_selected_file")  -- f
 if current_ui_file == "" then  -- for first ever load
     current_ui_file = "new"
     modstorage:set_string("_GUI_editor_selected_file", current_ui_file)
-    modstorage:set_string("_GUI_editor_file_"..current_ui_file, dump({{type="Size", name="", width=5, height=5, width_param=false, height_param=false, left=0.5, top=0.5, position=false}}))
+    modstorage:set_string("_GUI_editor_file_"..current_ui_file, dump({{type="Display", name="", width=5, height=5, width_param=false, height_param=false, left=0.5, top=0.5, position=false}}))
 end
 
 local function reload_ui()  -- update the display, and save the file
@@ -50,12 +66,15 @@ local function load_UI(name)  -- open/create a ui file
     modstorage:set_string("_GUI_editor_selected_file", current_ui_file)
     _, widgets = pcall(loadstring("return "..modstorage:get_string("_GUI_editor_file_"..current_ui_file)))
     if widgets == nil then
-        widgets = {{type="Size", name="", width=5, height=5, width_param=false, height_param=false, left=0.5, top=0.5, position=false}}
+        widgets = {{type="Display", name="", width=5, height=5, width_param=false, height_param=false, left=0.5, top=0.5,
+        position=false, background=false, colour="#000000aa", fullscreen=false, colour_tab=false,
+        col={col=false, bg_normal="#f0fa", bg_hover="#f0fa", set_border=false, border="#f0fa", set_tool=false, tool_bg="#f0fa", tool_font="#f0fa"}}}
     end
 end
 load_UI(current_ui_file)
 
---widgets = {{type="Size", name="", width=5, height=5, width_param=false, height_param=false, left=0.5, top=0.5, position=false}}
+-- uncomment below line to reset current file
+--widgets = {{type="Display", name="", width=5, height=5, width_param=false, height_param=false, left=0.5, top=0.5, position=false, background=false, colour="#000000aa", fullscreen=false, colour_tab=false, col={col=false, bg_normal="#f0fa", bg_hover="#f0fa", set_border=false, border="#f0fa", set_tool=false, tool_bg="#f0fa", tool_font="#f0fa"}} }
 
 ----------
 -- UI DISPLAY
@@ -71,6 +90,9 @@ local function generate_ui()
     local top = {0.1}
     local fwidth = {1}
     local fheight = {1}
+    
+    local form = ""
+    local boxes = ""  -- because I can't add to form in get_rect() function
     
     local depth = 1  -- container depth
     
@@ -93,7 +115,7 @@ local function generate_ui()
         if widget.top_type == "B-" then  -- value from bottom
             wtop = top[depth]+fheight[depth]-widget.top
         elseif widget.top_type == "H/" then  -- height/value from top
-            wtop = top[depth]+(fheight[depth]/widget.top)
+            wtop = top[depth]+(fheight[deformpth]/widget.top)
         else  -- value from top
             wtop = top[depth]+widget.top
         end
@@ -127,6 +149,11 @@ local function generate_ui()
                 wbottom = top[depth]+widget.bottom-wtop
             end
             
+            if wleft+wright > width then  -- stops widgets covering the controlls
+                boxes = boxes.."box["..width ..","..wtop ..";"..wleft+wright-width..","..wbottom..";#ff0000]"  -- shows where it would go
+                wright = width-wleft
+            end
+            
             if real then
                 return {left=wleft, top=wtop, width=wright, height=wbottom}  -- table uses the calculated values for other things
             end
@@ -134,12 +161,10 @@ local function generate_ui()
         end
     end
     
-    local form = ""
-    
     -- iterate all widgets
     for i, v in pairs(widgets) do
         
-        if v.type == "Size" then  -- defines the size
+        if v.type == "Display" then  -- defines the size
             if v.width < data.width-5.2 then
                 left = {math.floor(((data.width-5)/2 - v.width/2)*10)/10}  -- place the form in the center
             else
@@ -152,29 +177,49 @@ local function generate_ui()
             end
             fwidth = {v.width}
             fheight = {v.height}
-            form = form .. "box["..left[1]..","..top[1]..";"..v.width..","..v.height..";#000000]"  -- this adds it to the form
+            form = form .. 
+            -- "box["..left[1]..","..top[1]..";"..v.width..","..v.height..";#000000]"  -- this adds it to the form
+            "box["..left[1]-0.28 ..","..top[1]-0.3 ..";"..v.width+0.38 ..",".. 0.32 ..";#000000]" ..
+            "box["..left[1]-0.28 ..","..top[1]+v.height..";"..v.width+0.38 ..",".. 0.4 ..";#000000]" ..
+            "box["..left[1]-0.28 ..","..top[1]..";".. 0.3 ..","..v.height..";#000000]" ..
+            "box["..left[1]+v.width..","..top[1]..";".. 0.1 ..","..v.height..";#000000]"
+            
+            if v.background then
+                form = form .. "bgcolor["..v.colour..";"..tostring(v.fullscreen).."]"
+            end
+            if v.col.col then
+                form = form.."listcolors["..v.col.bg_normal..";"..v.col.bg_hover
+                if v.col.set_border then
+                    form = form..";"..v.col.border
+                    if v.col.set_tool then
+                        form = form..";"..v.col.tool_bg..";"..v.col.tool_font
+                    end
+                end
+                form = form.."]"
+            end
             
             
         elseif v.type == "Button" then
             if v.image then  -- image option
                 if v.item and not v.exit then
-                    form = form .. "item_image_button["..get_rect(v)..form_esc(v.texture)..";_none;"..form_esc(v.label).."]"
+                    form = form .. "item_image_button["..get_rect(v)..form_esc(v.texture)..";"..i.."_none;"..form_esc(v.label).."]"
                 else
-                    form = form .. "image_button["..get_rect(v)..form_esc(v.texture)..";_none;"..form_esc(v.label).."]"
+                    form = form .. "image_button["..get_rect(v)..form_esc(v.texture)..";"..i.."_none;"..form_esc(v.label).."]"
                 end
             else
-                form = form .. "button["..get_rect(v).."_none;"..form_esc(v.label).."]"
+                form = form .. "button["..get_rect(v)..i.."_none;"..form_esc(v.label).."]"
             end
         
         elseif v.type == "Field" then
             if v.password then  -- password option
-                form = form .. "pwdfield["..get_rect(v).."_none;"..form_esc(v.label).."]"
+                form = form .. "pwdfield["..get_rect(v)..i.."_none;"..form_esc(v.label).."]"
             else
-                form = form .. "field["..get_rect(v).."_none;"..form_esc(v.label)..";"..form_esc(v.default).."]"
+                form = form .. "field["..get_rect(v)..i.."_none;"..form_esc(v.label)..";"..form_esc(v.default).."]"
             end
+            form = form .. "field_close_on_enter["..i.."_none;false]"
         
         elseif v.type == "TextArea" then
-            form = form .. "textarea["..get_rect(v).."_none;"..form_esc(v.label)..";"..form_esc(v.default).."]"
+            form = form .. "textarea["..get_rect(v)..i.."_none;"..form_esc(v.label)..";"..form_esc(v.default).."]"
         
         elseif v.type == "Label" then
             if v.vertical then  -- vertical option
@@ -189,9 +234,9 @@ local function generate_ui()
                 item_str = item_str .. form_esc(item)..","
             end
             if v.transparent then  -- transparent option
-                form = form .. "textlist["..get_rect(v).."_none;"..item_str..";1;True]"
+                form = form .. "textlist["..get_rect(v)..i.."_none;"..item_str..";1;True]"
             else
-                form = form .. "textlist["..get_rect(v).."_none;"..item_str.."]"
+                form = form .. "textlist["..get_rect(v)..i.."_none;"..item_str.."]"
             end
             
         elseif v.type == "DropDown" then
@@ -199,10 +244,10 @@ local function generate_ui()
             for i, item in pairs(v.items) do
                 item_str = item_str .. form_esc(item)..","
             end
-            form = form .. "dropdown["..get_rect(v).."_none;"..item_str..";"..v.select_id.."]"
+            form = form .. "dropdown["..get_rect(v)..i.."_none;"..item_str..";"..v.select_id.."]"
             
         elseif v.type == "CheckBox" then
-            form = form .. "checkbox["..get_rect(v).."_none;"..v.label..";"..tostring(v.checked).."]"
+            form = form .. "checkbox["..get_rect(v)..i.."_none;"..v.label..";"..tostring(v.checked).."]"
             
         elseif v.type == "Box" then  -- a coloured square
             form = form .. "box["..get_rect(v)..form_esc(v.colour).."]"
@@ -210,6 +255,12 @@ local function generate_ui()
         elseif v.type == "Image" then
             if v.item then
                 form = form .. "item_image["..get_rect(v)..form_esc(v.image).."]"
+            elseif v.background then
+                if v.fill then
+                    form = form .. "background["..left[1]-0.18 ..","..top[1]-0.22 ..";"..fwidth[1]+0.37 ..","..fheight[1]+0.7 ..";"..form_esc(v.image).."]"
+                else
+                    form = form .. "background["..get_rect(v)..form_esc(v.image).."]"
+                end
             else
                 form = form .. "image["..get_rect(v)..form_esc(v.image).."]"
             end
@@ -219,17 +270,17 @@ local function generate_ui()
             if v.vertical then
                 orientation = "vertical"
             end
-            form = form .. "scrollbar["..get_rect(v)..orientation..";_none;"..v.value.."]"
+            form = form .. "scrollbar["..get_rect(v)..orientation..";"..i.."_none;"..v.value.."]"
             
         elseif v.type == "InvList" then
             local extras = {["player:"]=1, ["nodemeta:"]=1, ["detached:"]=1}  -- locations that need extra info (v.data)
             if extras[v.location] then
-                form = form .. "list["..v.location..form_esc(v.data)..";"..form_esc(v.name)..";"..get_rect(v).."]"
+                form = form .. "list["..v.location..form_esc(v.data)..";"..form_esc(v.name)..";"..get_rect(v)..v.start.."]"
                 if v.ring then  -- items can be shift clicked between ring items
                     form = form .. "listring["..v.location..form_esc(v.data)..";"..form_esc(v.name).."]"
                 end
             else
-                form = form .. "list["..v.location..";"..form_esc(v.name)..";"..get_rect(v).."]"
+                form = form .. "list["..v.location..";"..form_esc(v.name)..";"..get_rect(v)..v.start.."]"
                 if v.ring then
                     form = form .. "listring["..v.location..";"..form_esc(v.name).."]"
                 end
@@ -272,7 +323,18 @@ local function generate_ui()
             if column_str:len() > 0 then
                 form = form .. "tablecolumns["..column_str.."]"
             end
-            form = form .. "table["..get_rect(v).."_none;"..cell_str..";-1]"
+            form = form .. "table["..get_rect(v)..i.."_none;"..cell_str..";-1]"
+        
+        elseif v.type == "Tooltip" then
+            for n, w in pairs(widgets) do
+                if w.name == v.name and w.type ~= "Tooltip" then
+                    if v.colours then                    
+                        form = form .. "tooltip["..n.."_none;"..v.text..";"..v.bg..";"..v.fg.."]"
+                    else
+                        form = form .. "tooltip["..n.."_none;"..v.text.."]"
+                    end
+                end
+            end
         
         elseif v.type == "Container - Start" then
             local rect = get_rect(v, true, true)
@@ -284,11 +346,18 @@ local function generate_ui()
         elseif v.type == "Container - End" then
             depth = depth-1  -- go back to the parent area
         
+        elseif v.type == "Tabs" then
+            local capt_str = ""
+            for i, capt in pairs(v.captions) do
+                if i > 1 then capt_str = capt_str.."," end
+                capt_str = capt_str .. form_esc(capt)
+            end
+            form = form .. "tabheader["..get_rect(v)..i.."_none;"..capt_str..";"..v.tab..";"..tostring(v.transparent)..";"..tostring(v.border).."]"
+        
         end
     end
-    form = form .. "field_close_on_enter[_none;false]"  -- enter won't close the formspec in any textbox
     
-    return form, width+5, height
+    return form..boxes, width+5, height
 end
 
 
@@ -583,7 +652,7 @@ local function generate_function()
     -- go through all the widgets, and add their code
     for i, v in pairs(widgets) do
         
-        if v.type == "Size" then
+        if v.type == "Display" then
             local w, h
             if v.width_param then  -- things like this are for parameters
                 table.insert(parameters, "width")
@@ -601,6 +670,21 @@ local function generate_function()
             if v.position then  -- for non-default position
                 table.insert(display, '"position['..v.left..','..v.top..']"')
             end
+            if v.background then
+                table.insert(display, '"bgcolor['..v.colour..';'..tostring(v.fullscreen)..']"')
+            end
+            if v.col.col then
+                local cols = '"listcolors['..v.col.bg_normal..";"..v.col.bg_hover
+                if v.col.set_border then
+                    cols = cols..";"..v.col.border
+                    if v.col.set_tool then
+                        cols = cols..";"..v.col.tool_bg..";"..v.col.tool_font
+                    end
+                end
+                cols = cols..']"'
+                table.insert(display, cols)
+            end
+                
         
         elseif v.type == "Button" then
             if v.image then
@@ -747,6 +831,8 @@ local function generate_function()
             end
             if v.item then
                 table.insert(display, '"item_image['..get_rect(v)..';'..image..']"')
+            elseif v.background then
+                table.insert(display, '"background['..get_rect(v)..';'..image..';'..tostring(v.fill)..']"')
             else
                 table.insert(display, '"image['..get_rect(v)..';'..image..']"')
             end
@@ -772,7 +858,7 @@ local function generate_function()
             elseif extras[v.location] then
                 data = form_esc(v.data)
             end
-            local start = ""
+            local start = v.start
             if v.page_param then
                 table.insert(parameters, name(v).."_start_idx")
                 start = '"..'..name(v)..'_start_idx.."'
@@ -857,6 +943,13 @@ local function generate_function()
             end
             table.insert(display, '"table['..get_rect(v)..";"..form_esc(v.name)..';'..cell_str..';'..selected..']"')
         
+        elseif v.type == "Tooltip" then
+            if v.colours then                
+                table.insert(display, '"tooltip['..form_esc(v.name)..';'..form_esc(v.text)..';'..form_esc(v.bg)..';'..form_esc(v.fg)..']"')
+            else
+                table.insert(display, '"tooltip['..form_esc(v.name)..';'..form_esc(v.text)..']"')
+            end
+        
         elseif v.type == "Container - Start" then  -- container has 2 sections
             local l = v.left
             if v.left_param then  -- the only widget which can hve position parameters
@@ -890,6 +983,14 @@ local function generate_function()
         elseif v.type == "Container - End" then  -- only exits the table
             dep = dep-1
             table.insert(display, '"container_end[]"')
+        
+        elseif v.type == "Tabs" then
+            local capt_str = ""
+            for i, capt in pairs(v.captions) do
+                if i > 1 then capt_str = capt_str.."," end
+                capt_str = capt_str .. form_esc(capt)
+            end
+            table.insert(display, '"tabheader['..get_rect(v)..';'..form_esc(v.name)..';'..capt_str..';'..v.tab..';'.. tostring(v.transparent)..';'..tostring(v.border)..']"')
             
         end
     end
@@ -1007,13 +1108,27 @@ local function generate_string()
     
     for i, v in pairs(widgets) do  -- go through all the widgets and create their strings
         
-        if v.type == "Size" then
+        if v.type == "Display" then
             fwidth = {v.width}
             fheight = {v.height}
             output = output .. "\"size["..v.width..","..v.height.."]\" ..\n"
             if v.position then
                 output = output .. "\"position["..v.left..","..v.top.."]\" ..\n"
             end
+            if v.background then
+                output = output .. "\"bgcolor["..v.colour..";"..tostring(v.fullscreen).."]\" ..\n"
+            end
+            if v.col.col then
+                output = output.."\"listcolors["..v.col.bg_normal..";"..v.col.bg_hover
+                if v.col.set_border then
+                    output = output..";"..v.col.border
+                    if v.col.set_tool then
+                        output = output..";"..v.col.tool_bg..";"..v.col.tool_font
+                    end
+                end
+                output = output.."]\" ..\n"
+            end
+            
         elseif v.type == "Button" then
             if v.image then
                 local ending = get_rect(v)..form_esc(v.texture)..";"..form_esc(v.name)..";"..form_esc(v.label).."]\" ..\n"
@@ -1033,6 +1148,7 @@ local function generate_string()
                     output = output .. "\"button["..get_rect(v)..form_esc(v.name)..";"..form_esc(v.label).."]\" ..\n"
                 end
             end
+            
         elseif v.type == "Field" then
             if v.password then
                 output = output .. "\"pwdfield["..get_rect(v)..form_esc(v.name)..";"..form_esc(v.label).."]\" ..\n"
@@ -1042,14 +1158,17 @@ local function generate_string()
             if v.enter_close == false then
                 output = output .. "\"field_close_on_enter["..form_esc(v.name)..";false]\" ..\n"
             end
+            
         elseif v.type == "TextArea" then
             output = output .. "\"textarea["..get_rect(v)..form_esc(v.name)..";"..form_esc(v.label)..";"..form_esc(v.default).."]\" ..\n"
+            
         elseif v.type == "Label" then
             if v.vertical then
                 output = output .. "\"vertlabel["..get_rect(v)..form_esc(v.label).."]\" ..\n"
             else
                 output = output .. "\"label["..get_rect(v)..form_esc(v.label).."]\" ..\n"
             end
+            
         elseif v.type == "TextList" then
             local item_str = ""
             for i, item in pairs(v.items) do
@@ -1060,41 +1179,50 @@ local function generate_string()
             else
                 output = output .. "\"textlist["..get_rect(v)..form_esc(v.name)..";"..item_str:sub(0,-2)..";1;true]\" ..\n"
             end
+            
         elseif v.type == "DropDown" then
             local item_str = ""
             for i, item in pairs(v.items) do
                 item_str = item_str .. form_esc(item)..","
             end
             output = output .. "\"dropdown["..get_rect(v)..form_esc(v.name)..";"..item_str:sub(0,-2)..";"..v.select_id.."]\" ..\n"
+            
         elseif v.type == "CheckBox" then
             output = output .. "\"checkbox["..get_rect(v)..form_esc(v.name)..";"..form_esc(v.label)..";"..tostring(v.checked).."]\" ..\n"
+            
         elseif v.type == "Box" then
             output = output .. "\"box["..get_rect(v)..form_esc(v.colour).."]\" ..\n"
+            
         elseif v.type == "Image" then
             if v.item then
                 output = output .. "\"item_image["..get_rect(v)..form_esc(v.image).."]\" ..\n"
+            elseif v.background then
+                output = output .. "\"background["..get_rect(v)..form_esc(v.image)..";"..tostring(v.fill).."]\" ..\n"
             else
                 output = output .. "\"image["..get_rect(v)..form_esc(v.image).."]\" ..\n"
             end
+            
         elseif v.type == "Slider" then
             orientation = "horizontal"
             if v.vertical then
                 orientation = "vertical"
             end
             output = output .. "\"scrollbar["..get_rect(v)..orientation..";"..form_esc(v.name)..";"..v.value.."]\" ..\n"
+            
         elseif v.type == "InvList" then
             local extras = {["player:"]=1, ["nodemeta:"]=1, ["detached:"]=1}
             if extras[v.location] then
-                output = output .. "\"list["..v.location..form_esc(v.data)..";"..form_esc(v.name)..";"..get_rect(v).."]\" ..\n"
+                output = output .. "\"list["..v.location..form_esc(v.data)..";"..form_esc(v.name)..";"..get_rect(v)..v.start.."]\" ..\n"
                 if v.ring then
                     output = output .. "\"listring["..v.location..form_esc(v.data)..";"..form_esc(v.name).."]\" ..\n"
                 end
             else
-                output = output .. "\"list["..v.location..";"..form_esc(v.name)..";"..get_rect(v).."]\" ..\n"
+                output = output .. "\"list["..v.location..";"..form_esc(v.name)..";"..get_rect(v)..v.start.."]\" ..\n"
                 if v.ring then
                     output = output .. "\"listring["..v.location..";"..form_esc(v.name).."]\" ..\n"
                 end
             end
+            
         elseif v.type == "Table" then
             local cell_str = ""
             local column_str = ""
@@ -1136,6 +1264,14 @@ local function generate_string()
             end
             output = output .. "\"table["..get_rect(v)..form_esc(v.name)..";"..cell_str..";]\" ..\n"
             
+        elseif v.type == "Tooltip" then
+            if v.colours then                
+                output = output .. "\"tooltip["..form_esc(v.name)..";"..form_esc(v.text)..";"..form_esc(v.bg)..";"..form_esc(v.fg).."]\" ..\n"
+            else
+                output = output .. "\"tooltip["..form_esc(v.name)..";"..form_esc(v.text).."]\" ..\n"
+            end
+            
+            
         elseif v.type == "Container - Start" then
             local rect = get_rect(v, true)
             fwidth[dep+1] = rect.width  -- set the width and height that widgets in the container use
@@ -1146,6 +1282,13 @@ local function generate_string()
             dep = dep-1  -- close container
             output = output .. "\"container_end[]\" ..\n"
         
+        elseif v.type == "Tabs" then
+            local capt_str = ""
+            for i, capt in pairs(v.captions) do
+                if i > 1 then capt_str = capt_str.."," end
+                capt_str = capt_str .. form_esc(capt)
+            end
+            output = output .. "\"tabheader["..get_rect(v)..form_esc(v.name)..";"..capt_str..";"..v.tab..";"..tostring(v.transparent)..";"..tostring(v.border).."]\" ..\n"
         end
     end
     return output .. '""'
@@ -1248,26 +1391,71 @@ end
 
 -- functions for widget's custom editing UIs at the side
 local widget_editor_uis = {
-    Size = {  -- type can be seen here, etc, extra tabs (options, new widget) are at the end
+    Display = {  -- type can be seen here, etc, extra tabs (options, new widget) are at the end
         ui = function(id, left, top, width)  -- function for creating the form
-            local form = "label["..left+2 ..","..top ..";-  SIZE  -]" ..
-            ui_position("WIDTH", widgets[id].width, left, top+0.7) ..
-            ui_position("HEIGHT", widgets[id].height, left, top+1.7) ..
-            "checkbox["..left+3 ..","..top+0.7 ..";WIDTH_param_box;parameter;"..tostring(widgets[id].width_param).."]" ..
-            "checkbox["..left+3 ..","..top+1.7 ..";HEIGHT_param_box;parameter;"..tostring(widgets[id].height_param).."]"
+            local form = "label["..left+1.7 ..","..top ..";-  DISPLAY  -]"
             
-            if widgets[id].position then  -- this part only gets displayed if the position checkbox is checked
-                form = form .. 
-                ui_position("LEFT", widgets[id].left, left, top+2.7) ..
-                ui_position("TOP", widgets[id].top, left, top+3.7) ..
-                "checkbox["..left+0.1 ..","..top+4.3 ..";pos_box;position;true]"
+            if not widgets[id].colour_tab then
+                form = form ..
+                "button["..left+width-3 ..","..top+6.7 ..";3.1,1;col_page;INVENTORY COLOURS >]" ..
+                ui_position("WIDTH", widgets[id].width, left, top+0.7) ..
+                ui_position("HEIGHT", widgets[id].height, left, top+1.7) ..
+                "checkbox["..left+3 ..","..top+0.7 ..";WIDTH_param_box;parameter;"..tostring(widgets[id].width_param).."]" ..
+                "checkbox["..left+3 ..","..top+1.7 ..";HEIGHT_param_box;parameter;"..tostring(widgets[id].height_param).."]"
+                
+                if widgets[id].position then  -- this part only gets displayed if the position checkbox is checked
+                    form = form .. 
+                    ui_position("LEFT", widgets[id].left, left, top+2.7) ..
+                    ui_position("TOP", widgets[id].top, left, top+3.7) ..
+                    "checkbox["..left+0.1 ..","..top+4.3 ..";pos_box;position;true]" ..
+                    "checkbox["..left+2 ..","..top+4.3 ..";back_box;background;"..tostring(widgets[id].background).."]"
+                    if widgets[id].background then
+                        form = form..
+                        ui_field("COLOUR", widgets[id].colour, left+0.2, top+5.5) ..
+                        "checkbox["..left+3 ..","..top+5.2 ..";full;fullscreen;"..tostring(widgets[id].fullscreen).."]"
+                    end
+                else
+                    form = form .. "checkbox["..left+0.1 ..","..top+2.3 ..";pos_box;position;false]"  ..
+                    "checkbox["..left+2 ..","..top+2.3 ..";back_box;background;"..tostring(widgets[id].background).."]"
+                    if widgets[id].background then
+                        form = form..
+                        ui_field("COLOUR", widgets[id].colour, left+0.2, top+3.5) ..
+                        "checkbox["..left+3 ..","..top+3.2 ..";full;fullscreen;"..tostring(widgets[id].fullscreen).."]"
+                    end
+                end
             else
-                form = form .. "checkbox["..left+0.1 ..","..top+2.3 ..";pos_box;position;false]"
+                form = form ..
+                "checkbox["..left+0.1 ..","..top+0.3 ..";do_col;COLOURS;"..tostring(widgets[id].col.col).."]" ..
+                "button["..left+width-1.2 ..","..top+6.7 ..";1.3,1;dat_page;BACK <]"
+                
+                if widgets[id].col.col then
+                    form = form ..
+                    "field["..left+0.4 ..","..top+1.5 ..";2.8,1;bg_main;BACKGROUND;"..widgets[id].col.bg_normal.."]" ..
+                    "field_close_on_enter[bg_main;false]" ..
+                    "field["..left+0.4 ..","..top+2.5 ..";2.8,1;bg_hover;HOVER BACKGROUND;"..widgets[id].col.bg_hover.."]" ..
+                    "field_close_on_enter[bg_hover;false]" ..
+                    "checkbox["..left+0.1 ..","..top+2.8 ..";do_border;BORDER;"..tostring(widgets[id].col.set_border).."]"
+                    
+                    if widgets[id].col.set_border then
+                        form = form ..
+                        "field["..left+0.4 ..","..top+4 ..";2.8,1;border;BORDER;"..widgets[id].col.border.."]" ..
+                        "field_close_on_enter[border;false]" ..
+                        "checkbox["..left+0.1 ..","..top+4.3 ..";do_tool;TOOLTIP;"..tostring(widgets[id].col.set_tool).."]"
+                        if widgets[id].col.set_tool then
+                            form = form ..
+                            "field["..left+0.4 ..","..top+5.5 ..";2.8,1;bg_tool;BACKGROUND;"..widgets[id].col.tool_bg.."]" ..
+                            "field_close_on_enter[bg_tool;false]" ..
+                            "field["..left+0.4 ..","..top+6.5 ..";2.8,1;tool_text;TEXT;"..widgets[id].col.tool_font.."]" ..
+                            "field_close_on_enter[tool_text;false]"
+                        end
+                    end
+                end
             end
             return form
         end,
         func = function(id, fields)  -- function for handling the form
             handle_position_changes(id, fields, {left=1, top=1})
+            handle_field_changes({"colour"}, id, fields)
             if fields.WIDTH_param_box then
                 widgets[id].width_param = fields.WIDTH_param_box == "true"
             elseif fields.HEIGHT_param_box then
@@ -1275,7 +1463,35 @@ local widget_editor_uis = {
                 
             elseif fields.pos_box then
                 widgets[id].position = fields.pos_box == "true"
+            elseif fields.back_box then
+                widgets[id].background = fields.back_box == "true"
+            elseif fields.full then
+                widgets[id].fullscreen = fields.full == "true"
+            
+            elseif fields.col_page then  -- colour tab
+                widgets[id].colour_tab = true
+            elseif fields.dat_page then
+                widgets[id].colour_tab = false
+                
+            elseif fields.do_col then
+                widgets[id].col.col = fields.do_col == "true"
+            elseif fields.do_border then
+                widgets[id].col.set_border = fields.do_border == "true"
+            elseif fields.do_tool then
+                widgets[id].col.set_tool = fields.do_tool == "true"
+            
+            elseif fields.key_enter_field == "bg_main" then
+                widgets[id].col.bg_normal = fields.bg_main
+            elseif fields.key_enter_field == "bg_hover" then
+                widgets[id].col.bg_hover = fields.bg_hover
+            elseif fields.key_enter_field == "border" then
+                widgets[id].col.border = fields.border
+            elseif fields.key_enter_field == "bg_tool" then
+                widgets[id].col.tool_bg = fields.bg_tool
+            elseif fields.key_enter_field == "tool_text" then
+                widgets[id].col.tool_font = fields.tool_text
             end
+            
             reload_ui()  -- refresh the display and save the file
         end
     },
@@ -1283,7 +1499,6 @@ local widget_editor_uis = {
     Button = {
         ui = function(id, left, top, width)
             local form = "label["..left+1.8 ..","..top ..";-  BUTTON  -]" ..
-            "button["..left+3.9 ..","..top ..";1,1;delete;Delete]" ..
             ui_field("NAME", widgets[id].name, left+0.2, top+0.7) ..  -- all have a name box
             ui_position("LEFT", widgets[id].left, left, top+1.4, "LEFT", widgets[id].left_type) ..  -- and an area or position
             ui_position("TOP", widgets[id].top, left, top+2.4, "TOP", widgets[id].top_type) ..
@@ -1310,10 +1525,7 @@ local widget_editor_uis = {
         func = function(id, fields)
             handle_position_changes(id, fields)
             handle_field_changes({"name", "label", "texture"}, id, fields)
-            if fields.delete then  -- delete button is standard
-                table.remove(widgets, id)
-                
-            elseif fields.image_box then
+            if fields.image_box then
                 widgets[id].image = fields.image_box == "true"
             
             elseif fields.image_param_box then
@@ -1332,7 +1544,6 @@ local widget_editor_uis = {
     Field = {
         ui = function(id, left, top, width)
             local form = "label["..left+1.8 ..","..top ..";-  FIELD  -]" ..
-            "button["..left+3.9 ..","..top ..";1,1;delete;Delete]" ..
             ui_field("NAME", widgets[id].name, left+0.2, top+1) ..
             ui_position("LEFT", widgets[id].left, left, top+1.7, "LEFT", widgets[id].left_type) ..
             ui_position("TOP", widgets[id].top, left, top+2.7, "TOP", widgets[id].top_type) ..
@@ -1354,10 +1565,7 @@ local widget_editor_uis = {
         func = function(id, fields)
             handle_position_changes(id, fields)
             handle_field_changes({"name", "label", "default"}, id, fields)
-            if fields.delete then
-                table.remove(widgets, id)
-            
-            elseif fields.password_box then
+            if fields.password_box then
                 widgets[id].password = fields.password_box == "true"
             
             elseif fields.enter_close_box then
@@ -1370,7 +1578,6 @@ local widget_editor_uis = {
     TextArea = {
         ui = function(id, left, top, width)
             local form = "label["..left+1.8 ..","..top ..";-  TextArea  -]" ..
-            "button["..left+3.9 ..","..top ..";1,1;delete;Delete]" ..
             ui_field("NAME", widgets[id].name, left+0.2, top+1) ..
             ui_position("LEFT", widgets[id].left, left, top+1.7, "LEFT", widgets[id].left_type) ..
             ui_position("TOP", widgets[id].top, left, top+2.7, "TOP", widgets[id].top_type) ..
@@ -1385,9 +1592,6 @@ local widget_editor_uis = {
         func = function(id, fields)
             handle_position_changes(id, fields)
             handle_field_changes({"name", "label", "default"}, id, fields)
-            if fields.delete then
-                table.remove(widgets, id)
-            end
             reload_ui()
         end
     },
@@ -1395,7 +1599,6 @@ local widget_editor_uis = {
     Label = {
         ui = function(id, left, top, width)
             local form = "label["..left+2 ..","..top ..";-  Label  -]" ..
-            "button["..left+3.9 ..","..top ..";1,1;delete;Delete]" ..
             ui_field("NAME", widgets[id].name, left+0.2, top+1) ..
             ui_position("LEFT", widgets[id].left, left, top+1.7, "LEFT", widgets[id].left_type) ..
             ui_position("TOP", widgets[id].top, left, top+2.7, "TOP", widgets[id].top_type) ..
@@ -1407,10 +1610,7 @@ local widget_editor_uis = {
         func = function(id, fields)
             handle_position_changes(id, fields)
             handle_field_changes({"name", "label"}, id, fields)
-            if fields.delete then
-                table.remove(widgets, id)
-                
-            elseif fields.vert_box then
+            if fields.vert_box then
                 widgets[id].vertical = fields.vert_box == "true"
             end
             reload_ui()
@@ -1426,7 +1626,6 @@ local widget_editor_uis = {
             end
             
             local form = "label["..left+1.8 ..","..top ..";-  TextList  -]" ..
-            "button["..left+width-1.1 ..","..top ..";1,1;delete;Delete]" ..
             ui_field("NAME", widgets[id].name, left+0.2, top+1) ..
             ui_position("LEFT", widgets[id].left, left, top+1.7, "LEFT", widgets[id].left_type) ..
             ui_position("TOP", widgets[id].top, left, top+2.7, "TOP", widgets[id].top_type) ..
@@ -1447,10 +1646,7 @@ local widget_editor_uis = {
         func = function(id, fields)
             handle_position_changes(id, fields)
             handle_field_changes({"name"}, id, fields)
-            if fields.delete then
-                table.remove(widgets, id)
-                
-            elseif fields.item_list then  -- common (lazy) way I make editable lists
+            if fields.item_list then  -- common (lazy) way I make editable lists
                 if string.sub(fields.item_list, 1, 3) == "DCL" then  -- remove
                     table.remove(widgets[id].items, tonumber(string.sub(fields.item_list, 5)))
                 end
@@ -1479,7 +1675,6 @@ local widget_editor_uis = {
             end
             
             local form = "label["..left+1.8 ..","..top ..";-  DropDown  -]" ..
-            "button["..left+width-1.1 ..","..top ..";1,1;delete;Delete]" ..  -- add width to delete button!!!!
             ui_field("NAME", widgets[id].name, left+0.2, top+1) ..
             ui_position("LEFT", widgets[id].left, left, top+1.7, "LEFT", widgets[id].left_type) ..
             ui_position("TOP", widgets[id].top, left, top+2.7, "TOP", widgets[id].top_type) ..
@@ -1499,9 +1694,7 @@ local widget_editor_uis = {
         func = function(id, fields)
             handle_position_changes(id, fields)
             handle_field_changes({"name"}, id, fields)
-            if fields.delete then
-                table.remove(widgets, id)
-            elseif fields.item_list then
+            if fields.item_list then
                 if string.sub(fields.item_list, 1, 3) == "DCL" then
                     table.remove(widgets[id].items, tonumber(string.sub(fields.item_list, 5)))
                 else
@@ -1524,7 +1717,6 @@ local widget_editor_uis = {
         ui = function(id, left, top, width)
             local form = "label["..left+2 ..","..top ..";-  Label  -]" ..
             ui_field("NAME", widgets[id].name, left+0.2, top+1) ..
-            "button["..left+3.9 ..","..top ..";1,1;delete;Delete]" ..
             ui_position("LEFT", widgets[id].left, left, top+1.7, "LEFT", widgets[id].left_type) ..
             ui_position("TOP", widgets[id].top, left, top+2.7, "TOP", widgets[id].top_type) ..
             ui_field("LABEL", widgets[id].label, left+0.2, top+4) ..
@@ -1536,10 +1728,7 @@ local widget_editor_uis = {
         func = function(id, fields)
             handle_position_changes(id, fields)
             handle_field_changes({"name", "label"}, id, fields)
-            if fields.delete then
-                table.remove(widgets, id)
-            
-            elseif fields.checked_box then
+            if fields.checked_box then
                 widgets[id].checked = fields.checked_box == "true"
                 
             elseif fields.checked_param_box then
@@ -1552,7 +1741,6 @@ local widget_editor_uis = {
     Box = {
         ui = function(id, left, top, width)
             local form = "label["..left+1.8 ..","..top ..";-  Box  -]" ..
-            "button["..left+3.9 ..","..top ..";1,1;delete;Delete]" ..
             ui_field("NAME", widgets[id].name, left+0.2, top+1) ..
             ui_position("LEFT", widgets[id].left, left, top+1.7, "LEFT", widgets[id].left_type) ..
             ui_position("TOP", widgets[id].top, left, top+2.7, "TOP", widgets[id].top_type) ..
@@ -1566,9 +1754,6 @@ local widget_editor_uis = {
         func = function(id, fields)
             handle_position_changes(id, fields)
             handle_field_changes({"name", "colour"}, id, fields)
-            if fields.delete then
-                table.remove(widgets, id)
-            end
             reload_ui()
         end
     },
@@ -1576,7 +1761,6 @@ local widget_editor_uis = {
     Image = {
         ui = function(id, left, top, width)
             local form = "label["..left+1.8 ..","..top ..";-  Image  -]" ..
-            "button["..left+3.9 ..","..top ..";1,1;delete;Delete]" ..
             ui_field("NAME", widgets[id].name, left+0.2, top+1) ..
             ui_position("LEFT", widgets[id].left, left, top+1.7, "LEFT", widgets[id].left_type) ..
             ui_position("TOP", widgets[id].top, left, top+2.7, "TOP", widgets[id].top_type) ..
@@ -1586,16 +1770,24 @@ local widget_editor_uis = {
             "checkbox["..left+0.1 ..","..top+6.3 ..";item_box;item;"..tostring(widgets[id].item).."]" ..
             ""
             
+            if not widgets[id].item then
+                form = form .. "checkbox["..left+1.5 ..","..top+6.3 ..";back_box;background;"..tostring(widgets[id].background).."]"
+                if widgets[id].background then
+                    form = form .. "checkbox["..left+1.5 ..","..top+6.7 ..";fill_box;fill;"..tostring(widgets[id].fill).."]"
+                end
+            end
+            
             return form
         end,
         func = function(id, fields)
             handle_position_changes(id, fields)
             handle_field_changes({"name", "image"}, id, fields)
-            if fields.delete then
-                table.remove(widgets, id)
-                
-            elseif fields.item_box then
+            if fields.item_box then
                 widgets[id].item = fields.item_box == "true"
+            elseif fields.back_box then
+                widgets[id].background = fields.back_box == "true"
+            elseif fields.fill_box then
+                widgets[id].fill = fields.fill_box == "true"
             end
             reload_ui()
         end
@@ -1604,7 +1796,6 @@ local widget_editor_uis = {
     Slider = {
         ui = function(id, left, top, width)
             local form = "label["..left+1.8 ..","..top ..";-  Slider  -]" ..
-            "button["..left+3.9 ..","..top ..";1,1;delete;Delete]" ..
             ui_field("NAME", widgets[id].name, left+0.2, top+1) ..
             ui_position("LEFT", widgets[id].left, left, top+1.7, "LEFT", widgets[id].left_type) ..
             ui_position("TOP", widgets[id].top, left, top+2.7, "TOP", widgets[id].top_type) ..
@@ -1620,10 +1811,7 @@ local widget_editor_uis = {
         func = function(id, fields)
             handle_position_changes(id, fields, {value=1000})
             handle_field_changes({"name"}, id, fields)
-            if fields.delete then
-                table.remove(widgets, id)
-                
-            elseif fields.value_param_box then
+            if fields.value_param_box then
                 widgets[id].value_param = fields.value_param_box == "true"
             elseif fields.orientation then
                 local new = fields.orientation == "vertical"
@@ -1640,7 +1828,6 @@ local widget_editor_uis = {
         ui = function(id, left, top, width)
             local location_values = {context=1, current_player=2, ["player:"]=3, ["nodemeta:"]=4, ["detached:"]=5}
             local form = "label["..left+1.4 ..","..top ..";-  Inventory List  -]" ..
-            "button["..left+3.9 ..","..top ..";1,1;delete;Delete]" ..
             ui_position("LEFT", widgets[id].left, left, top+0.7, "LEFT", widgets[id].left_type) ..
             ui_position("TOP", widgets[id].top, left, top+1.7, "TOP", widgets[id].top_type) ..
             ui_position("RIGHT", widgets[id].right, left, top+2.7, "LEFT", widgets[id].right_type) ..
@@ -1648,8 +1835,11 @@ local widget_editor_uis = {
             "label["..left+0.1 ..","..top+4.4 ..";LOCATION]" ..
             "dropdown["..left+0.1 ..","..top+4.75 ..";2.8;location_select;context,current_player,player:,nodemeta:,detached:;" .. location_values[widgets[id].location].."]" ..
             ui_field("NAME", widgets[id].name, left+0.2, top+6) ..
-            "checkbox["..left+0.11 ..","..top+6.3 ..";page_box;page param;"..tostring(widgets[id].page_param).."]" ..
-            "checkbox["..left+0.11 ..","..top+6.7 ..";ring_box;ring;"..tostring(widgets[id].ring).."]"
+            "field["..left+0.4 ..","..top+7 ..";1,1;start;START;"..widgets[id].start.."]" ..
+            "field_close_on_enter[start;false]" ..
+            "checkbox["..left+1.5 ..","..top+6.7 ..";start_box;param;"..tostring(widgets[id].start_param).."]" ..
+            "checkbox["..left+3 ..","..top+5.9 ..";ring_box;ring;"..tostring(widgets[id].ring).."]"
+            
             
             local extras = {["player:"]=1, ["nodemeta:"]=1, ["detached:"]=1}  -- these locations need extra data
             if extras[widgets[id].location] then
@@ -1657,26 +1847,62 @@ local widget_editor_uis = {
                 "field_close_on_enter[data;false]" ..
                 "checkbox["..left+3 ..","..top+5.5 ..";data_box;data param;"..tostring(widgets[id].data_param).."]"
             end
-            
             return form
         end,
         func = function(id, fields)
             handle_position_changes(id, fields)
             handle_field_changes({"name"}, id, fields)
-            if fields.delete then
-                table.remove(widgets, id)
-                
-            elseif fields.ring_box then
+            if fields.ring_box then
                 widgets[id].ring= fields.ring_box == "true"
-            elseif fields.page_box then
-                widgets[id].page_param = fields.page_box == "true"
+            elseif fields.start_box then
+                widgets[id].start_param = fields.start_box == "true"
             elseif fields.data_box then
                 widgets[id].data_param = fields.data_box == "true"
             elseif fields.key_enter_field == "data" then
                 widgets[id].data = fields.data
+            elseif fields.key_enter_field == "start" then
+                widgets[id].start = tonumber(fields.start)
+                if widgets[id].start == nil then
+                    widgets[id].start = 0
+                end
+                
             elseif fields.location_select then
                 widgets[id].location = fields.location_select
             end
+            reload_ui()
+        end
+    },
+    
+    Tooltip = {
+        ui = function(id, left, top, width)
+            local form = "label["..left+1.7 ..","..top ..";-  Tooltip  -]" ..
+            ui_field("NAME", widgets[id].name, left+0.2, top+1) ..
+            ui_field("TEXT", widgets[id].text, left+0.2, top+2) ..
+            ""
+            
+            if widgets[id].colours then
+                form = form .. "field["..left+0.4 ..","..top+3 ..";2.8,1;bg;BACKGROUND;"..form_esc(widgets[id].bg).."]" ..
+                "field_close_on_enter[bg;false]" ..
+                "field["..left+0.4 ..","..top+4 ..";2.8,1;fg;TEXT COLOUR;"..form_esc(widgets[id].fg).."]" ..
+                "field_close_on_enter[fg;false]" ..
+                "checkbox["..left+0.12 ..","..top+4.4 ..";col_box;colours;true]"
+            else
+                form = form .. "checkbox["..left+0.12 ..","..top+2.4 ..";col_box;colours;false]"
+            end
+            
+            return form
+        end,
+        func = function(id, fields)
+            handle_field_changes({"name", "text"}, id, fields)
+            
+            if fields.key_enter_field == "bg" then
+                widgets[id].bg = fields.bg
+            elseif fields.key_enter_field == "fg" then
+                widgets[id].fg = fields.fg
+            elseif fields.col_box then
+                widgets[id].colours = fields.col_box == "true"
+            end
+            
             reload_ui()
         end
     },
@@ -1688,7 +1914,6 @@ local widget_editor_uis = {
                 column_str = column_str..","..i..": "..v.type
             end
             local form = "label["..left+1.8 ..","..top ..";-  Table  -]" ..
-            "button["..left+3.9 ..","..top ..";1,1;delete;Delete]" ..
             "textlist["..left+0.1 ..","..top+0.4 ..";2.5,1.5;column_select;#ffff00DATA,#ffff00- columns: "..column_str..";"..widgets[id].selected_column+2 ..";]" ..
             "button["..left+2.7 ..","..top+0.3 ..";0.5,1;column_up;/\\\\]" ..
             "button["..left+2.7 ..","..top+1.15 ..";0.5,1;column_down;\\\\/]" ..
@@ -1749,11 +1974,9 @@ local widget_editor_uis = {
             handle_field_changes({"name"}, id, fields)
             local number_usrs = {indent=1, tree=1, image=1}
             local c = widgets[id].columns[widgets[id].selected_column]
-            if fields.delete then
-                table.remove(widgets, id)
                 
             -- column selector and editor
-            elseif fields.column_select then
+            if fields.column_select then
                 widgets[id].selected_column = tonumber(string.sub(fields.column_select, 5))-2
             elseif fields.column_add then  -- column def
                 table.insert(widgets[id].columns, {type="text", items={}, images={}, selected_item=1, items_param=false, distance="infinite"})
@@ -1841,7 +2064,6 @@ local widget_editor_uis = {
     ["Container - Start"] = {
         ui = function(id, left, top, width)
             local form = "label["..left+1.8 ..","..top ..";-  Container  -]" ..
-            "button["..left+3.9 ..","..top ..";1,1;delete;Delete]" ..
             ui_field("NAME", widgets[id].name, left+0.2, top+1) ..
             "label["..left+3.8 ..","..top+1.4 ..";parameter]" ..
             ui_position("LEFT", widgets[id].left, left, top+1.7, "LEFT", widgets[id].left_type) ..
@@ -1858,22 +2080,8 @@ local widget_editor_uis = {
         func = function(id, fields)
             handle_position_changes(id, fields)
             handle_field_changes({"name"}, id, fields)
-            if fields.delete then
-                table.remove(widgets, id)
-                local depth = 0
-                while id <= #widgets and depth > -1 do  -- find which container end belongs to this container and delete it too
-                    if widgets[id].type == "Container - Start" then
-                        depth = depth+1
-                    elseif widgets[id].type == "Container - End" then
-                        if depth == 0 then
-                            table.remove(widgets, id)
-                        end
-                        depth = depth-1
-                    end
-                    id = id+1
-                end
                 
-            elseif fields.left_param_box then
+            if fields.left_param_box then
                 widgets[id].left_param = fields.left_param_box == "true"
             
             elseif fields.top_param_box then
@@ -1881,6 +2089,21 @@ local widget_editor_uis = {
             end
             
             reload_ui()
+        end,
+        del = function(id)
+            table.remove(widgets, id)
+            local depth = 0
+            while id <= #widgets and depth > -1 do  -- find which container end belongs to this container and delete it too
+                if widgets[id].type == "Container - Start" then
+                    depth = depth+1
+                elseif widgets[id].type == "Container - End" then
+                    if depth == 0 then
+                        table.remove(widgets, id)
+                    end
+                    depth = depth-1
+                end
+                id = id+1
+            end
         end
     },
     
@@ -1911,16 +2134,48 @@ local widget_editor_uis = {
         end
     },
     
-    Help = {
-        ui = function(id, left, top, width)
-            local form = ""
-            -- can't remember why I made this...
-            -- there will be a seperate help tab
+    Tabs = {
+        ui =function(id, left, top, width)
+            local item_str = ""
+            for i, v in pairs(widgets[id].captions) do
+                item_str = item_str .. form_esc(v) .. ","
+            end
+            
+            local form = "label["..left+1.9 ..","..top ..";-  Tabs  -]" ..
+            ui_field("NAME", widgets[id].name, left+0.2, top+1) ..
+            ui_position("LEFT", widgets[id].left, left, top+1.7, "LEFT", widgets[id].left_type) ..
+            ui_position("TOP", widgets[id].top, left, top+2.7, "TOP", widgets[id].top_type) ..
+            "label["..left+0.1 ..","..top+3.4 ..";TABS]" ..
+            "label["..left+1.8 ..","..top+3.4 ..";selected: "..widgets[id].tab.."]" ..
+            "textlist["..left+0.1 ..","..top+3.75 ..";2.6,0.7;item_list;"..item_str.."]" ..
+            "field["..left+3.3 ..","..top+4 ..";1.8,1;item_input;;]" ..
+            "field_close_on_enter[item_input;false]" ..
+            "checkbox["..left+0.1 ..","..top+4.3 ..";transparent_box;transparent;"..tostring(widgets[id].transparent).."]" ..
+            "checkbox["..left+0.1 ..","..top+4.7 ..";border_box;border;"..tostring(widgets[id].border).."]" ..
+            
+            ""
+            
             return form
         end,
         func = function(id, fields)
-            -- this is a good blank template though
-            reload()
+            handle_position_changes(id, fields)
+            handle_field_changes({"name"}, id, fields)
+            if fields.item_list then
+                if string.sub(fields.item_list, 1, 3) == "DCL" then
+                    table.remove(widgets[id].captions, tonumber(string.sub(fields.item_list, 5)))
+                else
+                    widgets[id].tab = tonumber(string.sub(fields.item_list, 5))
+                end
+            elseif fields.key_enter_field == "item_input" then
+                table.insert(widgets[id].captions, fields.item_input)
+                
+            elseif fields.transparent_box then
+                widgets[id].transparent = fields.transparent_box == "true"
+                
+            elseif fields.border_box then
+                widgets[id].border = fields.border_box == "true"
+            end
+            reload_ui()
         end
     },
     
@@ -2010,6 +2265,7 @@ local widget_editor_uis = {
                         
                     elseif name == "Image" then
                         table.insert(widgets, {type="Image", name="New Image", image="default_cloud.png", image_param=false, item=false,
+                        background=false, fill=false,
                         left=1, left_type="L+", top=1, top_type="T+", right=2, right_type="L+", bottom=2, bottom_type="T+"})
                         
                     elseif name == "Slider" then
@@ -2022,16 +2278,24 @@ local widget_editor_uis = {
                         left=1, left_type="L+", top=1, top_type="T+", right=2, right_type="L+", bottom=2, bottom_type="T+"})
                     
                     elseif name == "InvList" then
-                        table.insert(widgets, {type="InvList", name="main", location="current_player", page_param=false, data="", 
-                        data_param=false, ring=false,
+                        table.insert(widgets, {type="InvList", name="main", location="current_player", start_param=false, data="", 
+                        data_param=false, ring=false, colour_tab=false, start=0,
                         left=1, left_type="L+", top=1, top_type="T+", right=2, right_type="L+", bottom=2, bottom_type="T+"})
+                    
+                    elseif name == "Tooltip" then
+                        table.insert(widgets, {type="Tooltip", name="widget", text="New Tooltip", colours=false, bg="#00cc00", fg="#000000"})
                     
                     elseif name == "Container" then
                         table.insert(widgets, {type="Container - Start", name="New container", left_param=false, top_param=false,
                         left=1, left_type="L+", top=1, top_type="T+", right=4, right_type="L+", bottom=4, bottom_type="T+"})
                         table.insert(widgets, {type="Container - End", name=""})
+                    
+                    elseif name == "Tabs" then
+                        table.insert(widgets, {type="Tabs", name="New Tabs", captions={}, tab=1, transparent=false, border=false,
+                        left=0, left_type="L+", top=0, top_type="T+"})
                     end
                     
+                    new_widg_tab = false
                     reload_ui()
                 end
             end
@@ -2049,7 +2313,8 @@ local widget_editor_uis = {
 minetest.register_on_formspec_input(function(formname, fields)
     if formname == "ui_editor:main" then
         if fields.widg_select then  -- select a widget
-            selected_widget = tonumber(string.sub(fields.widg_select, 5))-5
+            selected_widget = tonumber(string.sub(fields.widg_select, 5))-4
+            new_widg_tab = false
             minetest.show_formspec("ui_editor:main", main_ui_form())
         
         elseif fields.widg_mov_up then  -- move a widget up
@@ -2069,6 +2334,7 @@ minetest.register_on_formspec_input(function(formname, fields)
                 end
                 table.insert(widgets, selected_widget-1, table.remove(widgets, selected_widget))  -- move it
                 selected_widget = selected_widget-1
+                new_widg_tab = false
                 reload_ui()
             end
             
@@ -2089,18 +2355,38 @@ minetest.register_on_formspec_input(function(formname, fields)
                 end
                 table.insert(widgets, selected_widget+1, table.remove(widgets, selected_widget))
                 selected_widget = selected_widget+1
+                new_widg_tab = false
                 reload_ui()
             end
             
+        elseif fields.widg_duplicate then  -- duplicate a widget
+            table.insert(widgets, copy_table(widgets[selected_widget]))
+            new_widg_tab = false
+            reload_ui()
+        
+        elseif fields.widg_new then  -- switch to the NEW WIDGET tab
+            new_widg_tab = not new_widg_tab
+            reload_ui()
+        
+        elseif fields.widg_delete then  -- delete a widget
+            if widgets[selected_widget].type == "Container - Start" then
+                widget_editor_uis["Container - Start"].del(selected_widget)
+            else
+                table.remove(widgets, selected_widget)
+            end
+            selected_widget = selected_widget-1
+            new_widg_tab = false
+            reload_ui()
+        
         elseif fields.quit == nil then  -- send update to widget editors
-            if selected_widget > 0 then
-                widget_editor_uis[widgets[selected_widget].type].func(selected_widget, fields)
-            elseif selected_widget == -2 then
+            if selected_widget == -2 or new_widg_tab then
                 widget_editor_uis["New"].func(selected_widget, fields)
+            elseif selected_widget > 0 then
+                widget_editor_uis[widgets[selected_widget].type].func(selected_widget, fields)
+                new_widg_tab = false
             elseif selected_widget == -3 then
                 widget_editor_uis["Options"].func(selected_widget, fields)
-            elseif selected_widget == -4 then
-                widget_editor_uis["Help"].func(selected_widget, fields)
+                new_widg_tab = false
             end
         end
     
@@ -2117,22 +2403,19 @@ local function widget_editor(left, height)
     if selected_widget == -1 or selected_widget == 0 or (selected_widget > 1 and widgets[selected_widget] == nil) then
         selected_widget = -2  -- blank items in the list can be used for adding new widgets
     end
-    if selected_widget > 0 then  -- load correct editor for current selected widget
+    if selected_widget == -2 or new_widg_tab then  -- the new widget tab can be displayed without moving the selection
+        form = form .. widget_editor_uis["New"].ui(selected_widget, left+0.1, 2.2, 4.8)
+    elseif selected_widget > 0 then  -- load correct editor for current selected widget
         form = form .. widget_editor_uis[widgets[selected_widget].type].ui(selected_widget, left+0.1, 2.2, 4.8)
-    elseif selected_widget == -4 then
-        form = form .. widget_editor_uis["Help"].ui(selected_widget, left+0.1, 2.2, 4.8)
     elseif selected_widget == -3 then
         form = form .. widget_editor_uis["Options"].ui(selected_widget, left+0.1, 2.2, 4.8)
-    elseif selected_widget == -2 then
-        form = form .. widget_editor_uis["New"].ui(selected_widget, left+0.1, 2.2, 4.8)
-        
     end
     return form
 end
 
 -- creates the widget selector
 local function widget_chooser(left)
-    local widget_str = "HELP,OPTIONS,NEW WIDGET,,.....,"  -- options at the top of the list
+    local widget_str = "OPTIONS,NEW WIDGET,,.....,"  -- options at the top of the list
     local depth = 0
     for i, v in pairs(widgets) do
         if v.type == "Container - End" then  -- the order of end and start are because they do not need indenting
@@ -2146,9 +2429,15 @@ local function widget_chooser(left)
     
     local form = ""..
     
-    "textlist["..left+0.1 ..",0.1;4.4,2;widg_select;"..widget_str..";"..selected_widget+5 .."]" ..
-    "button["..left+4.6 ..",0.1;0.5,1;widg_mov_up;"..form_esc("/\\").."]" ..
-    "button["..left+4.6 ..",1.2;0.5,1;widg_mov_dwn;"..form_esc("\\/").."]"
+    "textlist["..left+0.1 ..",0.1;3.4,2;widg_select;"..widget_str..";"..selected_widget+4 .."]" ..
+    "button["..left+3.6 ..",0.1;0.5,1;widg_mov_up;"..form_esc("/\\").."]" ..
+    "button["..left+3.6 ..",1.2;0.5,1;widg_mov_dwn;"..form_esc("\\/").."]"
+    
+    if selected_widget > 1 and selected_widget <= #widgets and widgets[selected_widget].type ~= "Container - End" then
+        form = form .. "button["..left+4 ..",0;1,1;widg_duplicate;DUPLICATE]" ..
+        "button["..left+4 ..",0.7;1,1;widg_delete;DELETE]" ..
+        "button["..left+4 ..",1.4;1,1;widg_new;NEW]"
+    end
     
     return form
 end
