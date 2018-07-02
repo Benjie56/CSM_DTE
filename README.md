@@ -47,7 +47,7 @@ formspec editor:
 - join a game or server, and it should work!
 
 ## Editing the files
-- if you do not wan't to edit the program, the `development` folder can be deleted!
+### - if you do not wan't to edit the program, the `development` folder can be deleted!
 when editing the program, it is easier to edit the smaller files found inside the `development` folder.
 these can be run as seperate CSMs for testing (I recomend disabling `csm_dte`)
 to join the together, copy the lua editor into `csm_dte/init.lua` and copy the formspec editor (from EDITOR START to EDITOR END) into the "PASTE FORMSPEC EDITOR HERE" section
