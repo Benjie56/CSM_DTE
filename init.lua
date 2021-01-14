@@ -62,9 +62,9 @@ local reg_funcs = {formspec_input={}, chatcommands={}, on_connect={}, joinplayer
 
 local selected_files = {0, 0}
 
-
-minetest.register_on_connect(function()  -- some functions don't work after startup. this tries to replace them
-
+--minetest.register_on_connect(function()  -- some functions don't work after startup. this tries to replace them
+minetest.register_on_mods_loaded(function()  -- update for newer API specs
+                                 
     minetest.get_mod_storage = function()
         return modstorage
     end
