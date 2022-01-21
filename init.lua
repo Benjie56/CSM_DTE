@@ -422,7 +422,7 @@ local function generate_ui()
         if widget.top_type == "B-" then  -- value from bottom
             wtop = top[depth]+fheight[depth]-widget.top
         elseif widget.top_type == "H/" then  -- height/value from top
-            wtop = top[depth]+(fheight[deformpth]/widget.top)
+            wtop = top[depth]+(fheight[depth]/widget.top)
         else  -- value from top
             wtop = top[depth]+widget.top
         end
