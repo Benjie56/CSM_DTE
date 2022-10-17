@@ -26,7 +26,7 @@ end
 
 
 ----------
--- LOAD AND DEFINE STUFF  - global stuff is accissible from the UI
+-- LOAD AND DEFINE STUFF  - global stuff is accessible from the UI
 ----------
 
 local split = function (str, splitter)  -- a function to split a string into a list. "\" before the splitter makes it ignore it (usefull for minetests formspecs)
@@ -62,9 +62,9 @@ local reg_funcs = {formspec_input={}, chatcommands={}, on_connect={}, joinplayer
 
 local selected_files = {0, 0}
 
-
-minetest.register_on_connect(function()  -- some functions don't work after startup. this tries to replace them
-
+--minetest.register_on_connect(function()  -- some functions don't work after startup. this tries to replace them
+minetest.register_on_mods_loaded(function()  -- update for newer API specs
+                                 
     minetest.get_mod_storage = function()
         return modstorage
     end
@@ -82,7 +82,7 @@ end)  -- add whatever functions don't work after startup to here (if possible)
 -- FUNCTIONS FOR UI
 ----------
 
-function print(...)  --  replace print to output into the UI. (doesn't refresh untill the script has ended)
+function print(...)  --  replace print to output into the UI. (doesn't refresh until the script has ended)
     params = {...}
     if #params == 1 then
         local str = params[1]
@@ -360,7 +360,7 @@ if current_ui_file == "" then  -- for first ever load
     current_ui_file = "new"
     modstorage:set_string("_GUI_editor_selected_file", current_ui_file)
     modstorage:set_string("_GUI_editor_file_"..current_ui_file, dump({{type="Display", name="", width=5, height=5, width_param=false, height_param=false, left=0.5, top=0.5,
-        position=false, background=false, colour="#000000aa", fullscreen=false, colour_tab=false,
+        position=false, background=false, color="#000000aa", fullscreen=false, color_tab=false,
         col={col=false, bg_normal="#f0fa", bg_hover="#f0fa", set_border=false, border="#f0fa", set_tool=false, tool_bg="#f0fa", tool_font="#f0fa"}}}))
 end
 
@@ -375,13 +375,13 @@ local function load_UI(name)  -- open/create a ui file
     _, widgets = pcall(loadstring("return "..modstorage:get_string("_GUI_editor_file_"..current_ui_file)))
     if widgets == nil then
         widgets = {{type="Display", name="", width=5, height=5, width_param=false, height_param=false, left=0.5, top=0.5,
-        position=false, background=false, colour="#000000aa", fullscreen=false, colour_tab=false,
+        position=false, background=false, color="#000000aa", fullscreen=false, color_tab=false,
         col={col=false, bg_normal="#f0fa", bg_hover="#f0fa", set_border=false, border="#f0fa", set_tool=false, tool_bg="#f0fa", tool_font="#f0fa"}}}
     end
 end
 load_UI(current_ui_file)
 
---widgets = {{type="Display", name="", width=5, height=5, width_param=false, height_param=false, left=0.5, top=0.5, position=false, background=false, colour="#000000aa", fullscreen=false, colour_tab=false, col={col=false, bg_normal="#f0fa", bg_hover="#f0fa", set_border=false, border="#f0fa", set_tool=false, tool_bg="#f0fa", tool_font="#f0fa"}} }
+--widgets = {{type="Display", name="", width=5, height=5, width_param=false, height_param=false, left=0.5, top=0.5, position=false, background=false, color="#000000aa", fullscreen=false, color_tab=false, col={col=false, bg_normal="#f0fa", bg_hover="#f0fa", set_border=false, border="#f0fa", set_tool=false, tool_bg="#f0fa", tool_font="#f0fa"}} }
 
 ----------
 -- UI DISPLAY
@@ -492,7 +492,7 @@ local function generate_ui()
             "box["..left[1]+v.width..","..top[1]..";".. 0.1 ..","..v.height..";#000000]"
             
             if v.background then
-                form = form .. "bgcolor["..v.colour..";"..tostring(v.fullscreen).."]"
+                form = form .. "bgcolor["..v.color..";"..tostring(v.fullscreen).."]"
             end
             if v.col.col then
                 form = form.."listcolors["..v.col.bg_normal..";"..v.col.bg_hover
@@ -556,8 +556,8 @@ local function generate_ui()
         elseif v.type == "CheckBox" then
             form = form .. "checkbox["..get_rect(v)..i.."_none;"..v.label..";"..tostring(v.checked).."]"
             
-        elseif v.type == "Box" then  -- a coloured square
-            form = form .. "box["..get_rect(v)..form_esc(v.colour).."]"
+        elseif v.type == "Box" then  -- a colored square
+            form = form .. "box["..get_rect(v)..form_esc(v.color).."]"
         
         elseif v.type == "Image" then
             if v.item then
@@ -611,7 +611,7 @@ local function generate_ui()
                     for n, t in pairs(c.images) do
                         column_str = column_str..","..n .."="..form_esc(t)
                     end
-                elseif c.type == "color" and c.distance ~= "infinite" then  -- add distance that coloures affect
+                elseif c.type == "color" and c.distance ~= "infinite" then  -- add distance that colors affect
                     column_str = column_str..",span="..c.distance
                 end
             end
@@ -621,7 +621,7 @@ local function generate_ui()
                         cell_str = cell_str..","
                     end
                     local item = c.items[i]
-                    if item == nil then  -- blank item if this column doesn't exend as far
+                    if item == nil then  -- blank item if this column doesn't extend as far
                         item = ""
                     end
                     cell_str = cell_str..form_esc(item)
@@ -635,7 +635,7 @@ local function generate_ui()
         elseif v.type == "Tooltip" then
             for n, w in pairs(widgets) do
                 if w.name == v.name and w.type ~= "Tooltip" then
-                    if v.colours then                    
+                    if v.colors then                    
                         form = form .. "tooltip["..n.."_none;"..v.text..";"..v.bg..";"..v.fg.."]"
                     else
                         form = form .. "tooltip["..n.."_none;"..v.text.."]"
@@ -722,7 +722,7 @@ local function generate_function()
         local fheight = height[dep]
         
         local wleft = "0"
-        if type(fwidth) == "string" or l then  -- if the area width (window or continer) will be changed with a parameter
+        if type(fwidth) == "string" or l then  -- if the area width (window or container) will be changed with a parameter
             local l_ = l  -- if the left of the widget comes from a parameter
             if l_ == nil then
                 l_ = widget.left
@@ -783,7 +783,7 @@ local function generate_function()
                 if l_ == nil then
                     l_ = widget.left
                 end
-                -- goes through all right types, and for eacg, goes through all left types to get the best calculation.
+                -- goes through all right types, and for each, goes through all left types to get the best calculation.
                 if widget.right_type == "R-" then  -- (I know there is a better way of doing this)
                     if widget.left_type == "R-" then
                         wright = fwidth..'- '..widget.right..'-('..fwidth..'- '..l_..')'
@@ -947,7 +947,7 @@ local function generate_function()
             end
             
             if real then
-                return {left=wleft, top=wtop, width=wright, height=wbottom}  -- container needs the values seperate
+                return {left=wleft, top=wtop, width=wright, height=wbottom}  -- container needs the values separate
             end
             return wleft..","..wtop..";"..wright..","..wbottom
         end
@@ -978,7 +978,7 @@ local function generate_function()
                 table.insert(display, '"position['..v.left..','..v.top..']"')
             end
             if v.background then
-                table.insert(display, '"bgcolor['..v.colour..';'..tostring(v.fullscreen)..']"')
+                table.insert(display, '"bgcolor['..v.color..';'..tostring(v.fullscreen)..']"')
             end
             if v.col.col then
                 local cols = '"listcolors['..v.col.bg_normal..";"..v.col.bg_hover
@@ -1123,12 +1123,12 @@ local function generate_function()
             table.insert(display, '"checkbox['..get_rect(v)..';'..form_esc(v.name)..";"..form_esc(v.label)..';'..checked..']"')
         
         elseif v.type == "Box" then
-            local colour = form_esc(v.colour)
-            if v.colour_param then
-                table.insert(parameters, name(v).."_colour")
-                colour = '"..'..name(v)..'_colour.."'
+            local color = form_esc(v.color)
+            if v.color_param then
+                table.insert(parameters, name(v).."_color")
+                color = '"..'..name(v)..'_color.."'
             end
-            table.insert(display, '"box['..get_rect(v)..';'..colour..']"')
+            table.insert(display, '"box['..get_rect(v)..';'..color..']"')
         
         elseif v.type == "Image" then
             local image = form_esc(v.image)
@@ -1197,7 +1197,7 @@ local function generate_function()
                     for n, t in pairs(c.images) do
                         column_str = column_str..","..n .."="..t
                     end
-                elseif c.type == "color" and c.distance ~= "infinite" then  -- and distance affected by colour
+                elseif c.type == "color" and c.distance ~= "infinite" then  -- and distance affected by color
                     column_str = column_str..",span="..c.distance
                 end
             end
@@ -1251,7 +1251,7 @@ local function generate_function()
             table.insert(display, '"table['..get_rect(v)..";"..form_esc(v.name)..';'..cell_str..';'..selected..']"')
         
         elseif v.type == "Tooltip" then
-            if v.colours then                
+            if v.colors then                
                 table.insert(display, '"tooltip['..form_esc(v.name)..';'..form_esc(v.text)..';'..form_esc(v.bg)..';'..form_esc(v.fg)..']"')
             else
                 table.insert(display, '"tooltip['..form_esc(v.name)..';'..form_esc(v.text)..']"')
@@ -1259,7 +1259,7 @@ local function generate_function()
         
         elseif v.type == "Container - Start" then  -- container has 2 sections
             local l = v.left
-            if v.left_param then  -- the only widget which can hve position parameters
+            if v.left_param then  -- the only widget which can have position parameters
                 table.insert(parameters, name(v).."_left")
                 l = name(v)..'_left'
             end
@@ -1423,7 +1423,7 @@ local function generate_string()
                 output = output .. "\"position["..v.left..","..v.top.."]\" ..\n"
             end
             if v.background then
-                output = output .. "\"bgcolor["..v.colour..";"..tostring(v.fullscreen).."]\" ..\n"
+                output = output .. "\"bgcolor["..v.color..";"..tostring(v.fullscreen).."]\" ..\n"
             end
             if v.col.col then
                 output = output.."\"listcolors["..v.col.bg_normal..";"..v.col.bg_hover
@@ -1498,7 +1498,7 @@ local function generate_string()
             output = output .. "\"checkbox["..get_rect(v)..form_esc(v.name)..";"..form_esc(v.label)..";"..tostring(v.checked).."]\" ..\n"
             
         elseif v.type == "Box" then
-            output = output .. "\"box["..get_rect(v)..form_esc(v.colour).."]\" ..\n"
+            output = output .. "\"box["..get_rect(v)..form_esc(v.color).."]\" ..\n"
             
         elseif v.type == "Image" then
             if v.item then
@@ -1572,7 +1572,7 @@ local function generate_string()
             output = output .. "\"table["..get_rect(v)..form_esc(v.name)..";"..cell_str..";]\" ..\n"
             
         elseif v.type == "Tooltip" then
-            if v.colours then                
+            if v.colors then                
                 output = output .. "\"tooltip["..form_esc(v.name)..";"..form_esc(v.text)..";"..form_esc(v.bg)..";"..form_esc(v.fg).."]\" ..\n"
             else
                 output = output .. "\"tooltip["..form_esc(v.name)..";"..form_esc(v.text).."]\" ..\n"
@@ -1641,14 +1641,14 @@ local function handle_position_changes(id, fields, range)
             else
                 widgets[id][v] = widgets[id][v] - 0.1
             end
-            if widgets[id][v] < 0.0001 and widgets[id][v] > -0.0001 then widgets[id][v] = 0 end  -- weird number behaviour
+            if widgets[id][v] < 0.0001 and widgets[id][v] > -0.0001 then widgets[id][v] = 0 end  -- weird number behavior
         elseif fields[string.upper(v).."_size_up"] then  -- up button
             if range and range[v] then
                 widgets[id][v] = widgets[id][v] + range[v]/10
             else
                 widgets[id][v] = widgets[id][v] + 0.1
             end
-            if widgets[id][v] < 0.0001 and widgets[id][v] > -0.0001 then widgets[id][v] = 0 end  -- weird number behaviour
+            if widgets[id][v] < 0.0001 and widgets[id][v] > -0.0001 then widgets[id][v] = 0 end  -- weird number behavior
         elseif fields.key_enter_field == string.upper(v).."_size" then  -- size edit box/displayer
             local value = tonumber(fields[string.upper(v).."_size"])
             if value ~= nil then
@@ -1684,7 +1684,7 @@ end
 
 -- handles field functionality
 local function handle_field_changes(names, id, fields)
-    for i, v in pairs(names) do  -- names are supplied this time, so only nececary ones are checked
+    for i, v in pairs(names) do  -- names are supplied this time, so only necessary ones are checked
         if fields.key_enter_field == string.upper(v).."_input_box" then
             widgets[id][v] = fields[string.upper(v).."_input_box"]
         elseif fields[string.upper(v).."_param_box"] then
@@ -1702,7 +1702,7 @@ local widget_editor_uis = {
         ui = function(id, left, top, width)  -- function for creating the form
             local form = "label["..left+1.7 ..","..top ..";-  DISPLAY  -]"
             
-            if not widgets[id].colour_tab then
+            if not widgets[id].color_tab then
                 form = form ..
                 "button["..left+width-3 ..","..top+6.7 ..";3.1,1;col_page;INVENTORY COLOURS >]" ..
                 ui_position("WIDTH", widgets[id].width, left, top+0.7) ..
@@ -1718,7 +1718,7 @@ local widget_editor_uis = {
                     "checkbox["..left+2 ..","..top+4.3 ..";back_box;background;"..tostring(widgets[id].background).."]"
                     if widgets[id].background then
                         form = form..
-                        ui_field("COLOUR", widgets[id].colour, left+0.2, top+5.5) ..
+                        ui_field("COLOUR", widgets[id].color, left+0.2, top+5.5) ..
                         "checkbox["..left+3 ..","..top+5.2 ..";full;fullscreen;"..tostring(widgets[id].fullscreen).."]"
                     end
                 else
@@ -1726,7 +1726,7 @@ local widget_editor_uis = {
                     "checkbox["..left+2 ..","..top+2.3 ..";back_box;background;"..tostring(widgets[id].background).."]"
                     if widgets[id].background then
                         form = form..
-                        ui_field("COLOUR", widgets[id].colour, left+0.2, top+3.5) ..
+                        ui_field("COLOUR", widgets[id].color, left+0.2, top+3.5) ..
                         "checkbox["..left+3 ..","..top+3.2 ..";full;fullscreen;"..tostring(widgets[id].fullscreen).."]"
                     end
                 end
@@ -1762,7 +1762,7 @@ local widget_editor_uis = {
         end,
         func = function(id, fields)  -- function for handling the form
             handle_position_changes(id, fields, {left=1, top=1})
-            handle_field_changes({"colour"}, id, fields)
+            handle_field_changes({"color"}, id, fields)
             if fields.WIDTH_param_box then
                 widgets[id].width_param = fields.WIDTH_param_box == "true"
             elseif fields.HEIGHT_param_box then
@@ -1775,10 +1775,10 @@ local widget_editor_uis = {
             elseif fields.full then
                 widgets[id].fullscreen = fields.full == "true"
             
-            elseif fields.col_page then  -- colour tab
-                widgets[id].colour_tab = true
+            elseif fields.col_page then  -- color tab
+                widgets[id].color_tab = true
             elseif fields.dat_page then
-                widgets[id].colour_tab = false
+                widgets[id].color_tab = false
                 
             elseif fields.do_col then
                 widgets[id].col.col = fields.do_col == "true"
@@ -2053,14 +2053,14 @@ local widget_editor_uis = {
             ui_position("TOP", widgets[id].top, left, top+2.7, "TOP", widgets[id].top_type) ..
             ui_position("RIGHT", widgets[id].right, left, top+3.7, "LEFT", widgets[id].right_type) ..
             ui_position("BOTTOM", widgets[id].bottom, left, top+4.7, "TOP", widgets[id].bottom_type) ..
-            ui_field("COLOUR", widgets[id].colour, left+0.2, top+6, widgets[id].colour_param) ..
+            ui_field("COLOUR", widgets[id].color, left+0.2, top+6, widgets[id].color_param) ..
             ""
             
             return form
         end,
         func = function(id, fields)
             handle_position_changes(id, fields)
-            handle_field_changes({"name", "colour"}, id, fields)
+            handle_field_changes({"name", "color"}, id, fields)
             reload_ui()
         end
     },
@@ -2187,14 +2187,14 @@ local widget_editor_uis = {
             ui_field("TEXT", widgets[id].text, left+0.2, top+2) ..
             ""
             
-            if widgets[id].colours then
+            if widgets[id].colors then
                 form = form .. "field["..left+0.4 ..","..top+3 ..";2.8,1;bg;BACKGROUND;"..form_esc(widgets[id].bg).."]" ..
                 "field_close_on_enter[bg;false]" ..
                 "field["..left+0.4 ..","..top+4 ..";2.8,1;fg;TEXT COLOUR;"..form_esc(widgets[id].fg).."]" ..
                 "field_close_on_enter[fg;false]" ..
-                "checkbox["..left+0.12 ..","..top+4.4 ..";col_box;colours;true]"
+                "checkbox["..left+0.12 ..","..top+4.4 ..";col_box;colors;true]"
             else
-                form = form .. "checkbox["..left+0.12 ..","..top+2.4 ..";col_box;colours;false]"
+                form = form .. "checkbox["..left+0.12 ..","..top+2.4 ..";col_box;colors;false]"
             end
             
             return form
@@ -2207,7 +2207,7 @@ local widget_editor_uis = {
             elseif fields.key_enter_field == "fg" then
                 widgets[id].fg = fields.fg
             elseif fields.col_box then
-                widgets[id].colours = fields.col_box == "true"
+                widgets[id].colors = fields.col_box == "true"
             end
             
             reload_ui()
@@ -2266,9 +2266,9 @@ local widget_editor_uis = {
                         "textlist["..left+0.1 ..","..top+6.2 ..";2.5,1.4;image_lst;"..img_str.."]" ..
                         "field["..left+3 ..","..top+6.4 ..";2,1;image_add;;]" ..
                         "field_close_on_enter[image_add;false]"
-                    elseif c.type == "color" then  -- colour
-                        form = form .. "field["..left+0.4 ..","..top+6.4 ..";2.5,1;colour_len;DISTANCE;"..c.distance.."]" ..
-                        "field_close_on_enter[colour_len;false]"
+                    elseif c.type == "color" then  -- color
+                        form = form .. "field["..left+0.4 ..","..top+6.4 ..";2.5,1;color_len;DISTANCE;"..c.distance.."]" ..
+                        "field_close_on_enter[color_len;false]"
                     end
                 end
             end
@@ -2345,8 +2345,8 @@ local widget_editor_uis = {
             elseif fields.image_lst and string.sub(fields.image_lst, 1, 3) == "DCL" then
                 table.remove(c.images, tonumber(string.sub(fields.image_lst, 5)))
             
-            elseif fields.colour_len then
-                c.distance = tonumber(fields.colour_len)
+            elseif fields.color_len then
+                c.distance = tonumber(fields.color_len)
                 if c.distance == nil or c.distance <= 0 then
                     c.distance = "infinite"
                 else
@@ -2419,7 +2419,7 @@ local widget_editor_uis = {
             local name = ""
             local depth = 0
             local pos = id-1
-            while pos > 0 and depth > -1 do  -- find which container start belongs to this container and display it's name
+            while pos > 0 and depth > -1 do  -- find which container start belongs to this container and display its name
                 if widgets[pos].type == "Container - Start" then
                     if depth == 0 then
                         name = widgets[pos].name
@@ -2437,7 +2437,6 @@ local widget_editor_uis = {
             return form
         end,
         func = function(id, fields)
-            -- ehem?
         end
     },
     
@@ -2561,7 +2560,7 @@ local widget_editor_uis = {
                         left=1, left_type="L+", top=1, top_type="T+"})
                     
                     elseif name == "Box" then
-                        table.insert(widgets, {type="Box", name="New Box", colour="#ffffff", colour_param=false,
+                        table.insert(widgets, {type="Box", name="New Box", color="#ffffff", color_param=false,
                         left=1, left_type="L+", top=1, top_type="T+", right=2, right_type="L+", bottom=2, bottom_type="T+"})
                         
                     elseif name == "Image" then
@@ -2580,11 +2579,11 @@ local widget_editor_uis = {
                     
                     elseif name == "InvList" then
                         table.insert(widgets, {type="InvList", name="main", location="current_player", start_param=false, data="", 
-                        data_param=false, ring=false, colour_tab=false, start=0,
+                        data_param=false, ring=false, color_tab=false, start=0,
                         left=1, left_type="L+", top=1, top_type="T+", right=2, right_type="L+", bottom=2, bottom_type="T+"})
                     
                     elseif name == "Tooltip" then
-                        table.insert(widgets, {type="Tooltip", name="widget", text="New Tooltip", colours=false, bg="#00cc00", fg="#000000"})
+                        table.insert(widgets, {type="Tooltip", name="widget", text="New Tooltip", colors=false, bg="#00cc00", fg="#000000"})
                     
                     elseif name == "Container" then
                         table.insert(widgets, {type="Container - Start", name="New container", left_param=false, top_param=false,
@@ -2621,8 +2620,8 @@ minetest.register_on_formspec_input(function(formname, fields)
         elseif fields.widg_mov_up then  -- move a widget up
             if selected_widget > 2 then
                 if widgets[selected_widget].type == "Container - End" and widgets[selected_widget-1].type == "Container - Start" then
-                    local pos = selected_widget-2  -- containers must always make sence. each start must have an end after it,
-                    local count = 0  --            -- so they can't move past eachother in some cases
+                    local pos = selected_widget-2  -- containers must always make sense. each start must have an end after it,
+                    local count = 0  --            -- so they can't move past each other in some cases
                     while pos > 0 do
                         if widgets[pos].type == "Container - End" then
                             count = count-1
@@ -2913,4 +2912,3 @@ core.register_chatcommand("dte", {  -- register the chat command
         minetest.show_formspec("lua:editor", lua_editor())
     end,
 })
-
